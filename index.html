@@ -1,0 +1,99 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Satranc 3D</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #151719; overflow: hidden; }
+  body { font: 15px/1.4 system-ui, -apple-system, sans-serif; color: #e8e4dc; }
+  #scene { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  #hud {
+    position: fixed; top: 16px; left: 16px; display: flex; gap: 12px; align-items: center;
+    background: rgba(20,22,25,.78); border: 1px solid #34383d; border-radius: 10px;
+    padding: 10px 14px; backdrop-filter: blur(8px);
+  }
+  #status { font-weight: 600; letter-spacing: .2px; }
+  #status.over { color: #ff8a6b; }
+  #reset {
+    font: inherit; font-size: 13px; color: #e8e4dc; cursor: pointer;
+    background: #2a2e33; border: 1px solid #41464c; border-radius: 6px; padding: 5px 11px;
+  }
+  #reset:hover { background: #343940; }
+  #flash { position: fixed; inset: 0; pointer-events: none; z-index: 20; background: rgba(255,235,200,0); }
+
+  /* --- ayarlar / dondurme aparati --- */
+  #ui button { font: inherit; color: #e8e4dc; cursor: pointer;
+    background: rgba(30,34,39,.9); border: 1px solid #41464c; border-radius: 8px; }
+  #ui button:hover { background: #3a4047; }
+  /* Secili durum: #ui button id ozgullugunu tasidigi icin bu kural da
+     tasimali, yoksa .active hicbir zaman uste cikmiyor. */
+  #ui button.active { background: #2f6d8a; border-color: #7fd4ff; }
+
+  .gear { position: fixed; top: 16px; right: 16px; width: 40px; height: 40px;
+    font-size: 19px; line-height: 1; backdrop-filter: blur(8px); }
+
+  .panel { position: fixed; top: 66px; right: 16px; width: 250px; z-index: 5;
+    background: rgba(22,25,29,.94); border: 1px solid #383d43; border-radius: 12px;
+    padding: 14px; backdrop-filter: blur(10px); }
+  .panel[hidden] { display: none; }
+  .panel h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .09em;
+    color: #8b929b; margin: 0 0 8px; }
+  .panel h3 + * { margin-bottom: 14px; }
+  .swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .swatch { display: flex; flex-direction: column; gap: 5px; padding: 7px; align-items: stretch; }
+  .swatch.active { border-color: #7fd4ff; box-shadow: 0 0 0 1px #7fd4ff inset; }
+  .swatch .chip { display: flex; height: 17px; border-radius: 4px; overflow: hidden; }
+  .swatch .chip i { flex: 1; }
+  .swatch .name { font-size: 11px; color: #c2c7ce; }
+  .panel .seg { display: flex; gap: 5px; margin-bottom: 7px; }
+  .panel .seg[hidden] { display: none; }
+  .panel .seg button { flex: 1; font-size: 12px; padding: 7px 2px; }
+  .panel .row { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
+  .panel .hint { font-size: 11px; color: #767d86; margin-top: 12px; line-height: 1.45; }
+
+  .dock { position: fixed; right: 16px; bottom: 16px; display: flex; gap: 6px;
+    background: rgba(22,25,29,.86); border: 1px solid #383d43; border-radius: 11px;
+    padding: 6px; backdrop-filter: blur(10px); }
+  .dock button { width: 38px; height: 38px; font-size: 15px; }
+
+  @media (max-width: 560px) {
+    .panel { width: calc(100vw - 32px); }
+    .dock button { width: 44px; height: 44px; }
+  }
+  #promo[hidden] { display: none; }
+  #promo {
+    position: fixed; inset: 0; display: grid; place-items: center;
+    background: rgba(10,11,13,.72); backdrop-filter: blur(4px); z-index: 10;
+  }
+  #promo .card {
+    background: #1d2024; border: 1px solid #3a3f45; border-radius: 12px;
+    padding: 18px 20px; text-align: center;
+  }
+  #promo h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  #promo .row { display: flex; gap: 8px; }
+  #promo button {
+    font: inherit; font-size: 13px; color: #e8e4dc; cursor: pointer; min-width: 74px;
+    background: #2a2e33; border: 1px solid #41464c; border-radius: 8px; padding: 9px 12px;
+  }
+  #promo button:hover { background: #363b42; border-color: #5a616a; }
+</style>
+
+<canvas id="scene"></canvas>
+<div id="hud">
+  <span id="status">Yukleniyor...</span>
+  <button id="reset">Yeni oyun</button>
+</div>
+<div id="flash"></div>
+<div id="ui"></div>
+
+<div id="promo" hidden>
+  <div class="card">
+    <h2>Piyon terfi ediyor — hangi tas?</h2>
+    <div class="row">
+      <button data-piece="q">Vezir</button>
+      <button data-piece="r">Kale</button>
+      <button data-piece="b">Fil</button>
+      <button data-piece="n">At</button>
+    </div>
+  </div>
+</div>
+<script type="module" src="/src/main.js"></script>

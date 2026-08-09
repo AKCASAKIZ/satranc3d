@@ -1,0 +1,138 @@
+import * as THREE from "three";
+import { squareToWorld } from "./board.js";
+import { createPiece } from "./pieces.js";
+import { runFinisher } from "./finishers.js";
+import { Clock } from "./clock.js";
+import { TimeScale } from "./fx/impact.js";
+
+/**
+ * Kare kare dogrulama modu.
+ *
+ *   ?demo=qxp        -> vezir piyonu yiyor, 6 zaman noktasi tek serit halinde
+ *   ?demo=all        -> alti imza hareketinin tamami, 6x6 tablo
+ *
+ * Butun kareler TEK sayfa yuklemesinde uretiliyor. Her kare icin ayri headless
+ * Chrome acmak kare basina dakikalar suruyordu; boylece tek acilista bitiyor.
+ *
+ * Determinizm sart: sinematik kamera, hit-stop ve sarsinti kapali, saat sabit
+ * adimla ilerletiliyor, parcalanma tohumu sabit. Ayni URL her zaman ayni goruntu.
+ */
+
+const TIMES = [0.0, 0.2, 0.35, 0.55, 0.85, 1.2];
+const ALL_SPECS = ["pxp", "rxp", "nxp", "bxp", "qxp", "kxp"];
+const NAMES = { p: "PIYON", r: "KALE", n: "AT", b: "FIL", q: "VEZIR", k: "SAH" };
+
+const TILE_W = 440;
+const TILE_H = 380;
+
+const FROM = "d4";
+const TO = "d5";
+
+export async function runDemo({ params, scene, settings, geometries }) {
+  for (const id of ["hud", "ui", "scene"]) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = "none";
+  }
+
+  const spec = params.get("demo") || "pxp";
+  const specs = spec === "all" ? ALL_SPECS : [spec];
+
+  // Finisher'in kameraya dokunmasini engelleyen sahte rig
+  settings.cinematic = false;
+  const stubRig = {
+    shake: null,
+    focus: () => Promise.resolve(),
+    restore: () => Promise.resolve(),
+  };
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(TILE_W, TILE_H, false);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const cam = new THREE.PerspectiveCamera(42, TILE_W / TILE_H, 0.1, 100);
+  const look = squareToWorld(TO).clone().setY(0.5);
+  const s = new THREE.Spherical(4.9, Math.PI / 2.9, -0.75);
+  cam.position.copy(look).add(new THREE.Vector3().setFromSpherical(s));
+  cam.lookAt(look);
+
+  const sheet = document.createElement("canvas");
+  sheet.width = TILE_W * TIMES.length;
+  sheet.height = TILE_H * specs.length;
+  const ctx = sheet.getContext("2d");
+  ctx.fillStyle = "#0b0d10";
+  ctx.fillRect(0, 0, sheet.width, sheet.height);
+
+  for (let row = 0; row < specs.length; row++) {
+    const [attackerType = "p", victimType = "p"] = specs[row].split("x");
+
+    for (let col = 0; col < TIMES.length; col++) {
+      const t = TIMES[col];
+      const keep = new Set(scene.children);
+
+      const attacker = createPiece(geometries, attackerType, "w");
+      attacker.position.copy(squareToWorld(FROM));
+      const victim = createPiece(geometries, victimType, "b");
+      victim.position.copy(squareToWorld(TO));
+      scene.add(attacker);
+      scene.add(victim);
+
+      // Her kare kendi saatiyle sifirdan oynuyor -- kareler birbirini etkilemesin
+      const timeScale = new TimeScale();
+      timeScale.freeze = () => {};
+      timeScale.slow = () => {};
+      const clock = new Clock(timeScale);
+
+      runFinisher({
+        scene,
+        attacker,
+        victim,
+        fromSquare: FROM,
+        toSquare: TO,
+        victimSquare: TO,
+        rig: stubRig,
+        timeScale,
+        settings,
+        clock,
+      });
+
+      // runFinisher tick'ini bir microtask sonra kaydediyor; beklemeden
+      // saati ilerletirsek hicbir sey oynamiyor.
+      await new Promise((r) => setTimeout(r, 0));
+
+      const STEP = 1 / 120;
+      for (let acc = 0; acc < t; acc += STEP) clock.tick(STEP);
+
+      renderer.render(scene, cam);
+      ctx.drawImage(renderer.domElement, col * TILE_W, row * TILE_H);
+
+      // Etiketler
+      ctx.font = "600 15px system-ui, sans-serif";
+      ctx.fillStyle = "#e8e4dc";
+      ctx.fillText(`t=${t.toFixed(2)}s`, col * TILE_W + 14, row * TILE_H + 26);
+      if (col === 0) {
+        ctx.font = "700 16px system-ui, sans-serif";
+        ctx.fillStyle = "#7fd4ff";
+        ctx.fillText(
+          `${NAMES[attackerType]} x ${NAMES[victimType]}`,
+          col * TILE_W + 14,
+          row * TILE_H + TILE_H - 16
+        );
+      }
+
+      // Bu karede sahneye eklenen her sey (parcalanma mesh'i dahil) temizlensin
+      for (const child of [...scene.children]) {
+        if (!keep.has(child)) scene.remove(child);
+      }
+    }
+  }
+
+  renderer.dispose();
+
+  const img = document.createElement("img");
+  img.src = sheet.toDataURL("image/png");
+  img.style.cssText = "display:block;width:100vw;height:auto";
+  document.body.style.cssText = "margin:0;background:#0b0d10;overflow:auto";
+  document.body.appendChild(img);
+}
