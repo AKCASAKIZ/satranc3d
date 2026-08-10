@@ -3,3 +3,8 @@ dist/
 out/
 .DS_Store
 __pycache__/
+
+# Gelen kung-fu setinin glb'leri assets/glb ile BIREBIR ayni (10-08-2026'da
+# kopyalandi) - ayni 12 MB'i iki kez tutmanin anlami yok. README ve preview
+# kaliyor: entegrasyon sozlesmesi ve referans render'lar orada.
+kungfu_satranc/glb/

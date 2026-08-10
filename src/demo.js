@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { squareToWorld } from "./board.js";
-import { createPiece } from "./pieces.js";
+import { createPiece, attachActorClock, resetIdlePhase } from "./pieces.js";
 import { runFinisher } from "./finishers.js";
 import { Clock } from "./clock.js";
 import { TimeScale } from "./fx/impact.js";
@@ -18,7 +18,10 @@ import { TimeScale } from "./fx/impact.js";
  * adimla ilerletiliyor, parcalanma tohumu sabit. Ayni URL her zaman ayni goruntu.
  */
 
-const TIMES = [0.0, 0.2, 0.35, 0.55, 0.85, 1.2];
+// Zaman noktalari dovusun fazlarina denk geliyor: yurume, savurma, vurus,
+// olum, silinme, toparlanma. Klipler kisalir/uzarsa buranin da guncellenmesi
+// gerekiyor -- degerler planFinisher'in ciktisiyla elle hizalandi.
+const TIMES = [0.0, 0.32, 0.62, 0.95, 1.5, 2.3];
 const ALL_SPECS = ["pxp", "rxp", "nxp", "bxp", "qxp", "kxp"];
 const NAMES = { p: "PIYON", r: "KALE", n: "AT", b: "FIL", q: "VEZIR", k: "SAH" };
 
@@ -28,7 +31,7 @@ const TILE_H = 380;
 const FROM = "d4";
 const TO = "d5";
 
-export async function runDemo({ params, scene, settings, geometries }) {
+export async function runDemo({ params, scene, settings, assets }) {
   for (const id of ["hud", "ui", "scene"]) {
     const el = document.getElementById(id);
     if (el) el.style.display = "none";
@@ -39,6 +42,9 @@ export async function runDemo({ params, scene, settings, geometries }) {
 
   // Finisher'in kameraya dokunmasini engelleyen sahte rig
   settings.cinematic = false;
+  // Dogrulama modu her zaman ayni sahneyi gostermeli; kullanicinin kayitli
+  // dovus ayari kareleri degistirmesin
+  settings.duel = params.get("duel") || "kisa";
   const stubRig = {
     shake: null,
     focus: () => Promise.resolve(),
@@ -71,9 +77,10 @@ export async function runDemo({ params, scene, settings, geometries }) {
       const t = TIMES[col];
       const keep = new Set(scene.children);
 
-      const attacker = createPiece(geometries, attackerType, "w");
+      resetIdlePhase();
+      const attacker = createPiece(assets, attackerType, "w");
       attacker.position.copy(squareToWorld(FROM));
-      const victim = createPiece(geometries, victimType, "b");
+      const victim = createPiece(assets, victimType, "b");
       victim.position.copy(squareToWorld(TO));
       scene.add(attacker);
       scene.add(victim);
@@ -83,6 +90,8 @@ export async function runDemo({ params, scene, settings, geometries }) {
       timeScale.freeze = () => {};
       timeScale.slow = () => {};
       const clock = new Clock(timeScale);
+      // Iskelet klipleri de bu karenin saatinden beslenmeli
+      attachActorClock(clock);
 
       runFinisher({
         scene,
@@ -121,7 +130,11 @@ export async function runDemo({ params, scene, settings, geometries }) {
         );
       }
 
-      // Bu karede sahneye eklenen her sey (parcalanma mesh'i dahil) temizlensin
+      // Bu karede sahneye eklenen her sey temizlensin. dispose() sart:
+      // aktorler mixer'lariyla birlikte global listede duruyor, sadece
+      // sahneden cikarmak 36 karelik tabloda 72 mixer birikmesi demek.
+      attacker.dispose();
+      victim.dispose();
       for (const child of [...scene.children]) {
         if (!keep.has(child)) scene.remove(child);
       }

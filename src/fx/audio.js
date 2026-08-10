@@ -1,6 +1,15 @@
 /**
  * Ses efektleri kodla uretiliyor -- dosya indirilmiyor, telif yok, boyut yok.
- * Hepsi WebAudio primitifleri: sinus thump + filtrelenmis gurultu.
+ *
+ * Tasarim kurali: hicbir efekt tek bir osilator degil. Her vurus uc katman --
+ * TRANSIENT (ilk 5 ms, "nereye carpti"), GOVDE (malzemenin inharmonik kismi
+ * tonlari, "neye carpti"), KUYRUK (gurultu + yanki, "nerede carpti"). Tek
+ * katmanli bip sesleri oyunu ucuz gosteriyordu; agirlik hissini bu ayrisim
+ * tasiyor.
+ *
+ * Butun sesler ortak bir tas salon yankisina ve limiter'a giriyor. Yanki
+ * sadece suslemi degil: kuru orneklerin "menude bir dugmeye bastim" hissini
+ * veren sey mekan yoklugu.
  *
  * Sesler "bus + mutlak zaman" uzerinden yaziliyor, canli AudioContext'e degil.
  * Boylece ayni voice kodu hem hoparlorde hem de klip icin OfflineAudioContext'te
@@ -27,12 +36,69 @@ function makeNoiseBuffer(ctx, seconds = 2) {
   return buf;
 }
 
+/**
+ * Tas salon yankisi. Hazir IR dosyasi yerine uretiliyor: iki kanal ayri
+ * tohumla dagitiliyor (genislik), tepe erken yansimalarla vurgulaniyor,
+ * tek kutuplu alcak gecirgen ile karartiliyor -- parlak yanki plastik duruyor.
+ */
+function makeImpulse(ctx, seconds = 1.6, decay = 4.2) {
+  const len = Math.ceil(ctx.sampleRate * seconds);
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buf.getChannelData(ch);
+    const rand = makeRandom(ch === 0 ? 0x1a2b : 0x7c3d);
+    let lp = 0;
+    for (let i = 0; i < len; i++) {
+      const k = i / len;
+      const v = (rand() * 2 - 1) * Math.pow(1 - k, decay);
+      lp += (v - lp) * 0.34; // karartma
+      data[i] = lp;
+    }
+    // Erken yansimalar: kuru sesin hemen ardindan gelen birkac sert vurus,
+    // odanin buyuklugunu asil bunlar anlatiyor.
+    for (const [ms, amp] of [[11, 0.5], [19, 0.36], [31, 0.26], [43, 0.18]]) {
+      const i = Math.floor((ms / 1000) * ctx.sampleRate) + ch * 7;
+      if (i < len) data[i] += amp * (ch === 0 ? 1 : -1);
+    }
+  }
+  return buf;
+}
+
 /** Bir AudioContext'i seslendirmeye hazir hale getirir. */
 export function createBus(ctx, { volume = 0.5, destination = null } = {}) {
-  const master = ctx.createGain();
+  const master = ctx.createGain(); // voice'lar buraya baglaniyor (kuru yol)
   master.gain.value = volume;
-  master.connect(destination ?? ctx.destination);
-  return { ctx, master, noise: makeNoiseBuffer(ctx) };
+
+  const send = ctx.createGain(); // yanki gonderisi
+  const convolver = ctx.createConvolver();
+  convolver.buffer = makeImpulse(ctx);
+  const wet = ctx.createGain();
+  wet.gain.value = 0.85 * volume;
+  send.connect(convolver);
+  convolver.connect(wet);
+
+  // Katmanlar ust uste binince tepe deger kaciyor. Limiter hem kirilmayi
+  // engelliyor hem de butun efektleri ayni "yapistiriciya" sokup tek bir
+  // dunyadan geliyormus gibi duyulmalarini sagliyor.
+  const glue = ctx.createDynamicsCompressor();
+  glue.threshold.value = -13;
+  glue.knee.value = 8;
+  glue.ratio.value = 6;
+  glue.attack.value = 0.003;
+  glue.release.value = 0.16;
+
+  // Hafif tiz acma: yankidan sonra ses matlasiyor, netligi buradan geri aliyoruz
+  const air = ctx.createBiquadFilter();
+  air.type = "highshelf";
+  air.frequency.value = 5200;
+  air.gain.value = 2.5;
+
+  master.connect(glue);
+  wet.connect(glue);
+  glue.connect(air);
+  air.connect(destination ?? ctx.destination);
+
+  return { ctx, master, send, noise: makeNoiseBuffer(ctx) };
 }
 
 function noiseSource(bus) {
@@ -46,14 +112,84 @@ function noiseSource(bus) {
  * Ustel zarf. exponentialRamp sifira gidemez, bu yuzden tepe degeri
  * tabanla sinirlaniyor -- power=0 gelirse WebAudio hata firlatirdi.
  */
-function envelope(bus, node, t, { attack = 0.002, decay = 0.25, peak = 1 } = {}) {
+function envelope(bus, node, t, { attack = 0.002, hold = 0, decay = 0.25, peak = 1 } = {}) {
   const g = bus.ctx.createGain();
   const p = Math.max(0.0002, peak);
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(p, t + attack);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+  if (hold > 0) g.gain.setValueAtTime(p, t + attack + hold);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + hold + decay);
   node.connect(g);
-  return { gain: g, stopAt: t + attack + decay + 0.05 };
+  return { gain: g, stopAt: t + attack + hold + decay + 0.05 };
+}
+
+/** Kuru sesi ayrica yankiya yollar. 0 = tamamen kuru (adim sesleri gibi). */
+function reverb(bus, node, amount) {
+  if (amount <= 0) return;
+  const g = bus.ctx.createGain();
+  g.gain.value = amount;
+  node.connect(g);
+  g.connect(bus.send);
+}
+
+/** Stereo yerlestirme -- ayni sesin katmanlari biraz acilinca genisliyor. */
+function panned(bus, node, pan) {
+  if (!bus.ctx.createStereoPanner || !pan) return node;
+  const p = bus.ctx.createStereoPanner();
+  p.pan.value = Math.max(-1, Math.min(1, pan));
+  node.connect(p);
+  return p;
+}
+
+/**
+ * Filtrelenmis gurultu patlamasi. `to` verilirse filtre suresince suzuluyor:
+ * asagi suzulme "cokme", yukari suzulme "savurma" hissi veriyor.
+ */
+function noiseBurst(
+  bus,
+  t,
+  { type = "bandpass", from = 1200, to = null, q = 1, attack = 0.001, hold = 0, decay = 0.12, peak = 0.4, wet = 0.2, pan = 0 } = {}
+) {
+  const n = noiseSource(bus);
+  const f = bus.ctx.createBiquadFilter();
+  f.type = type;
+  f.Q.value = q;
+  f.frequency.setValueAtTime(from, t);
+  if (to) f.frequency.exponentialRampToValueAtTime(Math.max(20, to), t + attack + hold + decay);
+  n.connect(f);
+  const e = envelope(bus, f, t, { attack, hold, decay, peak });
+  const out = panned(bus, e.gain, pan);
+  out.connect(bus.master);
+  reverb(bus, out, wet);
+  n.start(t);
+  n.stop(e.stopAt);
+  return e;
+}
+
+/**
+ * Inharmonik kismi ton yigini. Malzemeyi belirleyen sey burasi: tam kat
+ * oranlar (1, 2, 3...) muzik aleti gibi duyuluyor; tas ve dovme metal
+ * oranlari kaydirdigi icin "cisim" gibi duyuluyor.
+ */
+function partials(bus, t, base, ratios, { type = "sine", decay = 0.3, peak = 0.3, wet = 0.3, spread = 0.5 } = {}) {
+  ratios.forEach((ratio, i) => {
+    const osc = bus.ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.setValueAtTime(base * ratio, t);
+    // Ust kismi tonlar daha hizli sonuyor -- gercek cisimlerde de boyle
+    const fall = Math.pow(0.62, i);
+    const e = envelope(bus, osc, t, { attack: 0.002, decay: decay * fall, peak: peak * fall });
+    const out = panned(bus, e.gain, ((i % 2 ? 1 : -1) * spread * i) / ratios.length);
+    out.connect(bus.master);
+    reverb(bus, out, wet);
+    osc.start(t);
+    osc.stop(e.stopAt);
+  });
+}
+
+/** Ilk 5 ms. Kulagin "sert" diye algiladigi sey neredeyse tamamen burada. */
+function transient(bus, t, { peak = 0.4, freq = 3800, decay = 0.012, pan = 0 } = {}) {
+  noiseBurst(bus, t, { type: "highpass", from: freq, q: 0.7, attack: 0.0008, decay, peak, wet: 0.08, pan });
 }
 
 /**
@@ -61,78 +197,148 @@ function envelope(bus, node, t, { attack = 0.002, decay = 0.25, peak = 1 } = {})
  * "simdi" kavrami yok, bu yuzden ileri tarihe de programlanabiliyor.
  */
 export const VOICES = {
-  /** Agir carpma: alcak sinus thump + kisa bantli gurultu patlamasi. */
+  /**
+   * Oldurucu darbe: mermer heykele inen agir vurus.
+   * Alt uctaki sinus dususu agirligi, inharmonik tas tonlari malzemeyi,
+   * moloz kuyrugu da sonucu tasiyor.
+   */
   impact(bus, t, { pitch = 90, power = 1 } = {}) {
-    const osc = bus.ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(pitch * 2.2, t);
-    osc.frequency.exponentialRampToValueAtTime(pitch * 0.5, t + 0.16);
-    const oe = envelope(bus, osc, t, { decay: 0.28, peak: 0.9 * power });
-    oe.gain.connect(bus.master);
-    osc.start(t);
-    osc.stop(oe.stopAt);
+    transient(bus, t, { peak: 0.55 * power, freq: 3400 });
 
-    const n = noiseSource(bus);
-    const bp = bus.ctx.createBiquadFilter();
-    bp.type = "bandpass";
-    bp.frequency.value = 1400;
-    bp.Q.value = 0.8;
-    n.connect(bp);
-    const ne = envelope(bus, bp, t, { decay: 0.1, peak: 0.55 * power });
-    ne.gain.connect(bus.master);
-    n.start(t);
-    n.stop(ne.stopAt);
+    // Govde: tasin catlamasi
+    partials(bus, t, pitch * 2.05, [1, 1.71, 2.63, 4.11], {
+      decay: 0.34,
+      peak: 0.42 * power,
+      wet: 0.34,
+    });
+
+    // Alt uc: darbenin agirligi. Duyulmaktan cok hissediliyor.
+    const sub = bus.ctx.createOscillator();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(pitch * 1.15, t);
+    sub.frequency.exponentialRampToValueAtTime(pitch * 0.38, t + 0.22);
+    const se = envelope(bus, sub, t, { attack: 0.004, decay: 0.42, peak: 0.85 * power });
+    se.gain.connect(bus.master);
+    reverb(bus, se.gain, 0.18);
+    sub.start(t);
+    sub.stop(se.stopAt);
+
+    // Kuyruk: dokulen moloz
+    noiseBurst(bus, t + 0.012, {
+      from: 2600,
+      to: 320,
+      q: 0.6,
+      decay: 0.4,
+      peak: 0.34 * power,
+      wet: 0.45,
+    });
   },
 
-  /** Parcalanma: yuksek frekansli gurultu kuyrugu, hizli sonum. */
+  /**
+   * Bloklanan vurus: silah kalkana carpiyor. Oldurucu darbeden acikca
+   * ayri duymali, yoksa tam dovuste iki vurus tek ses gibi geliyor --
+   * bu yuzden parlak, uzun kuyruklu ve bol yankili.
+   */
+  clash(bus, t, { power = 1 } = {}) {
+    transient(bus, t, { peak: 0.5 * power, freq: 5200 });
+    // Can oranlari: dovme metalin cinlamasi
+    partials(bus, t, 520, [1, 2.76, 5.4, 8.93, 13.34], {
+      type: "triangle",
+      decay: 0.85,
+      peak: 0.3 * power,
+      wet: 0.6,
+      spread: 0.8,
+    });
+    noiseBurst(bus, t, { from: 3600, to: 1400, q: 1.6, decay: 0.16, peak: 0.28 * power, wet: 0.4 });
+  },
+
+  /**
+   * Silah savurma. Darbeden ~0.12 sn once caliniyor: carpmanin geldigini
+   * haber veren bu ses, carpmanin kendisi kadar agirlik katiyor.
+   */
+  whoosh(bus, t, { power = 1, pan = -0.25 } = {}) {
+    noiseBurst(bus, t, {
+      from: 300,
+      to: 2400,
+      q: 1.2,
+      attack: 0.06,
+      decay: 0.16,
+      peak: 0.95 * power,
+      wet: 0.25,
+      pan,
+    });
+  },
+
+  /** Devrilme: govdenin tahtaya carpmasi + dagilan moloz. */
+  death(bus, t, { power = 1 } = {}) {
+    const sub = bus.ctx.createOscillator();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(78, t);
+    sub.frequency.exponentialRampToValueAtTime(31, t + 0.3);
+    const e = envelope(bus, sub, t, { attack: 0.006, decay: 0.5, peak: 0.7 * power });
+    e.gain.connect(bus.master);
+    reverb(bus, e.gain, 0.3);
+    sub.start(t);
+    sub.stop(e.stopAt);
+
+    noiseBurst(bus, t, { type: "lowpass", from: 900, to: 160, decay: 0.55, peak: 0.34 * power, wet: 0.4 });
+    noiseBurst(bus, t + 0.13, { from: 2200, to: 700, q: 0.8, decay: 0.5, peak: 0.16 * power, wet: 0.5 });
+  },
+
+  /** Parcalanan mermer -- yuksek frekansli dagilma kuyrugu. */
   shatter(bus, t, { power = 1 } = {}) {
-    const n = noiseSource(bus);
-    const hp = bus.ctx.createBiquadFilter();
-    hp.type = "highpass";
-    hp.frequency.setValueAtTime(2200, t);
-    hp.frequency.exponentialRampToValueAtTime(600, t + 0.5);
-    n.connect(hp);
-
-    const g = bus.ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, 0.42 * power), t + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
-    hp.connect(g);
-    g.connect(bus.master);
-
-    n.start(t);
-    n.stop(t + 0.6);
+    transient(bus, t, { peak: 0.15 * power, freq: 6000 });
+    noiseBurst(bus, t, { type: "highpass", from: 2400, to: 620, decay: 0.5, peak: 0.18 * power, wet: 0.55 });
+    partials(bus, t, 1180, [1, 1.83, 2.94], { decay: 0.22, peak: 0.07 * power, wet: 0.5 });
   },
 
   /** Toz: alcak gecirgen gurultu, yavas fade -- carpmadan hemen sonra. */
   dust(bus, t, { power = 1 } = {}) {
-    const n = noiseSource(bus);
-    const lp = bus.ctx.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.value = 420;
-    n.connect(lp);
-
-    const g = bus.ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, 0.2 * power), t + 0.08);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
-    lp.connect(g);
-    g.connect(bus.master);
-
-    n.start(t);
-    n.stop(t + 1.0);
+    noiseBurst(bus, t, {
+      type: "lowpass",
+      from: 520,
+      to: 180,
+      attack: 0.07,
+      decay: 0.85,
+      peak: 0.34 * power,
+      wet: 0.4,
+    });
   },
 
-  /** Tas tahtaya otururken cikan kisa tok ses. */
-  place(bus, t) {
-    const osc = bus.ctx.createOscillator();
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(220, t);
-    osc.frequency.exponentialRampToValueAtTime(120, t + 0.07);
-    const e = envelope(bus, osc, t, { decay: 0.09, peak: 0.22 });
-    e.gain.connect(bus.master);
-    osc.start(t);
-    osc.stop(e.stopAt);
+  /** Tas ayagin tahtaya basmasi -- yurume klibi sessiz kalmasin. */
+  step(bus, t, { power = 1 } = {}) {
+    noiseBurst(bus, t, { type: "lowpass", from: 1100, to: 300, decay: 0.09, peak: 0.34 * power, wet: 0.14 });
+    partials(bus, t, 132, [1, 2.4], { decay: 0.08, peak: 0.2 * power, wet: 0.1 });
+  },
+
+  /** Tas tahtaya otururken cikan kisa tok ses -- mermer tiklamasi. */
+  place(bus, t, { power = 1 } = {}) {
+    transient(bus, t, { peak: 0.1 * power, freq: 4200 });
+    partials(bus, t, 296, [1, 2.67, 4.31], { decay: 0.13, peak: 0.13 * power, wet: 0.25 });
+  },
+
+  /** Zafer: kisa bronz fanfar. Tam dovusun sonunu kapatiyor. */
+  victory(bus, t, { power = 1 } = {}) {
+    [0, 0.09, 0.18].forEach((offset, i) => {
+      const freq = [294, 392, 588][i];
+      for (const detune of [-6, 6]) {
+        const osc = bus.ctx.createOscillator();
+        osc.type = "sawtooth";
+        osc.frequency.value = freq;
+        osc.detune.value = detune;
+        const lp = bus.ctx.createBiquadFilter();
+        lp.type = "lowpass";
+        lp.frequency.setValueAtTime(700, t + offset);
+        lp.frequency.exponentialRampToValueAtTime(2600, t + offset + 0.12);
+        osc.connect(lp);
+        const e = envelope(bus, lp, t + offset, { attack: 0.03, hold: 0.1, decay: 0.5, peak: 0.13 * power });
+        const out = panned(bus, e.gain, detune > 0 ? 0.3 : -0.3);
+        out.connect(bus.master);
+        reverb(bus, out, 0.5);
+        osc.start(t + offset);
+        osc.stop(e.stopAt);
+      }
+    });
   },
 };
 

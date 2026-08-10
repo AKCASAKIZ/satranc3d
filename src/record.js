@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { squareToWorld } from "./board.js";
-import { createPiece } from "./pieces.js";
+import { createPiece, attachActorClock, resetIdlePhase } from "./pieces.js";
 import { runFinisher, finisherTiming } from "./finishers.js";
 import { Clock } from "./clock.js";
 import { TimeScale, Shake } from "./fx/impact.js";
@@ -132,14 +132,15 @@ function toBlob(canvas) {
 }
 
 /** Tek bir oldurusu kare kare render edip sunucuya yollar. */
-async function recordOne({ spec, scene, geometries, settings, renderer, canvas2d, opts }) {
+async function recordOne({ spec, scene, assets, settings, renderer, canvas2d, opts }) {
   const [attackerType = "q", victimType = "p"] = spec.split("x");
   const { w, h, fps, label } = opts;
 
   const keep = new Set(scene.children);
-  const attacker = createPiece(geometries, attackerType, "w");
+  resetIdlePhase();
+  const attacker = createPiece(assets, attackerType, "w");
   attacker.position.copy(squareToWorld(FROM));
-  const victim = createPiece(geometries, victimType, "b");
+  const victim = createPiece(assets, victimType, "b");
   victim.position.copy(squareToWorld(TO));
   scene.add(attacker, victim);
 
@@ -147,6 +148,9 @@ async function recordOne({ spec, scene, geometries, settings, renderer, canvas2d
   let elapsed = 0;
   const timeScale = new TimeScale(() => elapsed * 1000);
   const clock = new Clock(timeScale);
+  // Iskelet klipleri de sanal saatten beslensin -- yoksa hit-stop sirasinda
+  // kamera donar ama karakterler oynamaya devam eder.
+  attachActorClock(clock);
 
   // --- efektler olay listesine yaziliyor ---
   const sounds = [];
@@ -180,7 +184,7 @@ async function recordOne({ spec, scene, geometries, settings, renderer, canvas2d
   // runFinisher tick'ini bir microtask sonra kaydediyor
   await new Promise((r) => setTimeout(r, 0));
 
-  const timing = finisherTiming(attackerType);
+  const timing = finisherTiming(attackerType, settings.duel, squareToWorld(FROM).distanceTo(squareToWorld(TO)));
   const total = clipLength(timing.duration);
   const frames = Math.round(total * fps);
   const step = 1 / fps;
@@ -240,11 +244,13 @@ async function recordOne({ spec, scene, geometries, settings, renderer, canvas2d
     "application/json"
   );
 
+  attacker.dispose();
+  victim.dispose();
   for (const child of [...scene.children]) if (!keep.has(child)) scene.remove(child);
   return { spec, frames };
 }
 
-export async function runRecord({ params, scene, settings, geometries }) {
+export async function runRecord({ params, scene, settings, assets }) {
   for (const id of ["hud", "ui", "scene", "flash"]) {
     const el = document.getElementById(id);
     if (el) el.style.display = "none";
@@ -255,6 +261,8 @@ export async function runRecord({ params, scene, settings, geometries }) {
   const fps = Number(params.get("fps") || 30);
   const label = params.get("label") !== "0";
   const spec = params.get("clip") || "qxp";
+  // Klipler her zaman tam dovusu gosteriyor -- pazarlama icerigi bu
+  settings.duel = params.get("duel") || "tam";
   const specs = spec === "all" ? ALL_SPECS : [spec];
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -281,7 +289,7 @@ export async function runRecord({ params, scene, settings, geometries }) {
   try {
     for (const s of specs) {
       const t0 = Date.now();
-      const r = await recordOne({ spec: s, scene, geometries, settings, renderer, canvas2d, opts: { w, h, fps, label } });
+      const r = await recordOne({ spec: s, scene, assets, settings, renderer, canvas2d, opts: { w, h, fps, label } });
       say(`${s}: ${r.frames} kare, ${((Date.now() - t0) / 1000).toFixed(1)} sn`);
     }
     await post("/__clip/finished", JSON.stringify({ specs }), "application/json");

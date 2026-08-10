@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { BOARD_MATERIALS } from "./board.js";
-import { PIECE_MATERIALS } from "./pieces.js";
+import { applyPieceColors } from "./pieces.js";
 
 /**
  * Renk temalari. Her tema hem tahtayi hem taslari hem de arka plani belirler.
@@ -69,8 +69,9 @@ export function applyTheme(scene, name) {
   BOARD_MATERIALS.light.color.setHex(t.light);
   BOARD_MATERIALS.dark.color.setHex(t.dark);
   BOARD_MATERIALS.frame.color.setHex(t.frame);
-  PIECE_MATERIALS.w.color.setHex(t.white);
-  PIECE_MATERIALS.b.color.setHex(t.black);
+  // Sadece govde (mermer/obsidyen) boyaniyor; bronz ve koyu metal aksesuar
+  // olarak kaliyor, yoksa silah da tas rengine karisip siluet kayboluyor.
+  applyPieceColors(t.white, t.black);
   scene.background = new THREE.Color(t.bg);
   return t;
 }

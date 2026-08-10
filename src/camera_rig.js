@@ -94,9 +94,11 @@ export class CameraRig {
 
   /** Hazir bakis acilari. */
   preset(name) {
+    // Karakterler eski kati taslardan belirgin daha uzun (1.05-1.36 birim);
+    // eski alcak acida on sira arka sirayi tamamen kapatiyordu.
     const views = {
-      beyaz: { azimuth: 0, polar: Math.PI / 3.4, radius: 12 },
-      siyah: { azimuth: Math.PI, polar: Math.PI / 3.4, radius: 12 },
+      beyaz: { azimuth: 0, polar: Math.PI / 3.8, radius: 12.6 },
+      siyah: { azimuth: Math.PI, polar: Math.PI / 3.8, radius: 12.6 },
       ustten: { azimuth: 0, polar: 0.12, radius: 11.5 },
       yandan: { azimuth: Math.PI / 2, polar: Math.PI / 2.5, radius: 12 },
       sinematik: { azimuth: -0.6, polar: Math.PI / 2.9, radius: 9.5 },

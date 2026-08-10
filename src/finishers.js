@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { squareToWorld } from "./board.js";
-import { createShatter } from "./fx/shatter.js";
 import { flash } from "./fx/impact.js";
 import { play } from "./fx/audio.js";
+import { CLIP, ATTACK_IMPACT, ATTACK_LENGTH, BLOCK_IMPACT, CLIP_LENGTH } from "./pieces.js";
 
 /**
  * Efekt kanali. Canli oyunda ekrana/hoparlore gider; klip kaydinda ayni
@@ -15,191 +15,130 @@ export const LIVE_FX = {
 };
 
 /**
- * Altı imza oldurus hareketi.
+ * Yeme sahnesi.
  *
- * Onemli tasarim karari: taslar KATI CISIM, hareketin tamami konum/donus/olcek
- * egrisi. Bu yuzden rig, skinning veya Blender animasyonu yok -- hepsi burada
- * prosedurel keyframe. Iterasyon aninda, ogrenme egrisi sifir.
+ * Onemli degisiklik: taslar artik kati cisim degil, iskeletli karakterler.
+ * Hareketin karakteri Blender kliplerinden geliyor (Walk / Attack /
+ * Guard_Block / Hit_React / Death / Victory), bu dosya sadece ZAMANLAMAYI
+ * ve tahta uzerindeki KONUMU suruyor. Klip isimleri alti tasta da ayni
+ * oldugu icin tas tipine gore dallanma yok -- tek fark vurusun degdigi kare.
  *
- * Ton: sert ama soyut. Guc, carpma ani + parcalanmayla tasiniyor; kan yok.
+ * Cizelge tamamen zaman surumlu (promise zinciri degil): demo ve klip kaydi
+ * saati elle adim adim ilerletiyor, arada await olsaydi hicbiri ilerlemezdi.
  */
 
-const easeOutCubic = (k) => 1 - Math.pow(1 - k, 3);
-const easeInCubic = (k) => k * k * k;
 const easeInOutQuad = (k) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2);
+const easeOutCubic = (k) => 1 - Math.pow(1 - k, 3);
+
+/** Klip oynatma hizlari. Ham klipler sinematik tempoda; oyun icin sikilastirildi. */
+const SPEED = { walk: 1.0, attack: 1.3, block: 1.3, hit: 1.3, death: 1.35, victory: 1.35 };
+
+const MOVE_SPEED = 2.6; // kare/sn -- tahtada yurume hizi
+const STANDOFF = 0.8; // kurbanin karesine bu kadar yaklasip duruyor
+const ADVANCE = 0.42; // olduruksen sonra hedef kareye adim suresi
+const DEATH_HOLD = 0.8; // olum klibinin oynatilan kismi
+const FADE = 0.55; // sonra govdenin silinme suresi
+const TURN_RATE = 9.0; // radyan/sn -- kurbanin saldirgana donusu
 
 /**
- * Her finisher bir "zaman cizelgesi" tanimliyor: sureler + carpma ani +
- * saldiranin o andaki konumunu veren fonksiyon.
- *
- *   from/to  : dunya koordinatlari
- *   k        : 0..1 normalize zaman
- *   donus    : { pos: Vector3, rot?: {x,y,z}, scale?: Vector3 }
+ * Darbenin agirligi: flas, sarsinti ve hit-stop siddetini belirliyor.
+ * Klipler ayni oldugu icin taslar arasindaki fark burada tasiniyor.
  */
-const MOVES = {
-  // Piyon: geri cekilip kafa atma, ardindan cift sekme
-  p: {
-    duration: 1.15,
-    impactAt: 0.34,
-    arc: 0.12,
-    power: 0.75,
-    shakeStrength: 0.1,
-    at(k, from, to, up) {
-      const pos = new THREE.Vector3();
-      if (k < 0.22) {
-        // hazirlik: geri cekilme
-        const e = easeOutCubic(k / 0.22);
-        pos.lerpVectors(from, to, -0.18 * e);
-      } else if (k < 0.34) {
-        // atilis
-        const e = easeInCubic((k - 0.22) / 0.12);
-        pos.lerpVectors(from, to, -0.18 + 1.18 * e);
-      } else {
-        // cift sekme ile yerlesme
-        const e = (k - 0.34) / 0.66;
-        pos.copy(to);
-        pos.addScaledVector(up, Math.abs(Math.sin(e * Math.PI * 2)) * 0.12 * (1 - e));
-      }
-      return { pos };
-    },
-  },
+const POWER = { p: 0.75, r: 1.25, n: 1.15, b: 1.0, q: 1.3, k: 1.45 };
 
-  // Kale: yukselip hedefin ustune agir cokus
-  r: {
-    duration: 1.35,
-    impactAt: 0.46,
-    arc: 1.9,
-    power: 1.25,
-    shakeStrength: 0.22,
-    at(k, from, to, up) {
-      const pos = new THREE.Vector3();
-      if (k < 0.28) {
-        // yukselme
-        const e = easeOutCubic(k / 0.28);
-        pos.copy(from).addScaledVector(up, 1.9 * e);
-      } else if (k < 0.46) {
-        // hedefin ustune kayis + serbest dusus
-        const e = (k - 0.28) / 0.18;
-        pos.lerpVectors(from, to, easeInOutQuad(e));
-        pos.addScaledVector(up, 1.9 * (1 - easeInCubic(e)));
-      } else {
-        const e = (k - 0.46) / 0.54;
-        pos.copy(to).addScaledVector(up, 0.1 * (1 - e) * Math.sin(e * Math.PI * 3));
-      }
-      return { pos };
-    },
-  },
-
-  // At: yay cizerek sicrayis, iki ayakla ezis
-  n: {
-    duration: 1.3,
-    impactAt: 0.42,
-    arc: 2.3,
-    power: 1.15,
-    shakeStrength: 0.2,
-    at(k, from, to, up) {
-      const pos = new THREE.Vector3();
-      const rot = { x: 0, y: 0, z: 0 };
-      if (k < 0.42) {
-        const e = k / 0.42;
-        pos.lerpVectors(from, to, easeInOutQuad(e));
-        pos.addScaledVector(up, Math.sin(e * Math.PI) * 2.3);
-        rot.x = -Math.sin(e * Math.PI) * 0.55; // one dogru egilme
-      } else {
-        const e = (k - 0.42) / 0.58;
-        pos.copy(to).addScaledVector(up, 0.14 * (1 - e) * Math.sin(e * Math.PI * 2.5));
-        rot.x = -0.55 * Math.max(0, 1 - e * 3);
-      }
-      return { pos, rot };
-    },
-  },
-
-  // Fil: caprazdan hizli suzulus -- carpmadan sonra da devam edip durur
-  b: {
-    duration: 1.25,
-    impactAt: 0.38,
-    arc: 0.0,
-    power: 1.0,
-    shakeStrength: 0.14,
-    at(k, from, to, up) {
-      const pos = new THREE.Vector3();
-      const rot = { x: 0, y: 0, z: 0 };
-      if (k < 0.16) {
-        const e = easeOutCubic(k / 0.16);
-        pos.lerpVectors(from, to, -0.12 * e);
-        rot.z = 0.25 * e;
-      } else if (k < 0.55) {
-        // icinden gecis: hedefi asip devam ediyor
-        const e = easeInCubic((k - 0.16) / 0.39);
-        pos.lerpVectors(from, to, -0.12 + 1.5 * e);
-        rot.z = 0.25 - 0.5 * e;
-      } else {
-        // geri suzulup karesine oturma
-        const e = easeOutCubic((k - 0.55) / 0.45);
-        pos.lerpVectors(from, to, 1.38 - 0.38 * e);
-        rot.z = -0.25 * (1 - e);
-      }
-      return { pos, rot };
-    },
-  },
-
-  // Vezir: havada donerek tek darbe
-  q: {
-    duration: 1.4,
-    impactAt: 0.44,
-    arc: 1.4,
-    power: 1.3,
-    shakeStrength: 0.24,
-    at(k, from, to, up) {
-      const pos = new THREE.Vector3();
-      const rot = { x: 0, y: 0, z: 0 };
-      if (k < 0.44) {
-        const e = k / 0.44;
-        pos.lerpVectors(from, to, easeInCubic(e));
-        pos.addScaledVector(up, Math.sin(e * Math.PI) * 1.4);
-        rot.y = e * Math.PI * 4; // iki tam tur
-      } else {
-        const e = (k - 0.44) / 0.56;
-        pos.copy(to).addScaledVector(up, 0.1 * (1 - e) * Math.sin(e * Math.PI * 2));
-        rot.y = Math.PI * 4 + easeOutCubic(e) * Math.PI * 0.5;
-      }
-      return { pos, rot };
-    },
-  },
-
-  // Sah: yavas tek adim, kurban basincla icine coker
-  k: {
-    duration: 1.55,
-    impactAt: 0.55,
-    arc: 0.22,
-    power: 1.45,
-    shakeStrength: 0.28,
-    at(k, from, to, up) {
-      const pos = new THREE.Vector3();
-      if (k < 0.55) {
-        // agir, kararli ilerleyis
-        const e = easeInOutQuad(k / 0.55);
-        pos.lerpVectors(from, to, e);
-        pos.addScaledVector(up, Math.sin(e * Math.PI) * 0.22);
-      } else {
-        const e = (k - 0.55) / 0.45;
-        pos.copy(to).addScaledVector(up, 0.06 * (1 - e) * Math.sin(e * Math.PI * 2));
-      }
-      return { pos };
-    },
-  },
+/** Dovus uzunlugu ayari. UI'da "Oldurus" basligi altinda. */
+export const DUEL_MODES = {
+  tam: "Tam dovus",
+  kisa: "Tek darbe",
+  kapali: "Kapali",
 };
 
-const UP = new THREE.Vector3(0, 1, 0);
+const duelMode = (settings) => (settings?.duel in DUEL_MODES ? settings.duel : "kisa");
 
 /**
- * Bir hareketin sure/carpma bilgisi. Klip kaydi klibin uzunlugunu ve kamera
- * dalisinin ne zaman bitecegini buradan okuyor -- sureler iki yerde yazili
- * olsaydi finisher'i her ayarlayista video kadraji kayardi.
+ * Sahnenin zaman cizelgesini kurar. Saf fonksiyon: aktor gerektirmiyor,
+ * boylece klip kaydi video suresini ve kamera dalisini taslar sahneye
+ * girmeden once hesaplayabiliyor.
+ *
+ * @param {string} type saldiran tas kodu
+ * @param {string} mode "tam" | "kisa" | "kapali"
+ * @param {number} dist saldiran ile kurban arasindaki kare mesafesi
  */
-export function finisherTiming(type) {
-  const m = MOVES[type] ?? MOVES.p;
-  return { duration: m.duration, impactAt: m.impactAt, power: m.power, arc: m.arc ?? 0 };
+export function planFinisher(type, mode = "kisa", dist = 1) {
+  const power = POWER[type] ?? 1;
+
+  if (mode === "kapali") {
+    // Dovus yok: saldiran kayarak geliyor, kurban ayni anda cokuyor.
+    const slide = THREE.MathUtils.clamp(dist / (MOVE_SPEED * 1.7), 0.22, 0.5);
+    return {
+      mode,
+      power,
+      walkEnd: slide,
+      lethal: slide * 0.72,
+      fadeStart: slide * 0.72,
+      total: slide + FADE * 0.7,
+    };
+  }
+
+  const approach = Math.max(0, dist - STANDOFF);
+  const walkEnd = THREE.MathUtils.clamp(approach / MOVE_SPEED, 0.25, 0.95);
+
+  const attackLen = ATTACK_LENGTH[type] / SPEED.attack;
+  const attackHit = ATTACK_IMPACT[type] / SPEED.attack;
+
+  // Tam dovuste ilk vurus bloklaniyor, oldurucu olan ikincisi. Ikinci
+  // savurma birincinin toparlanmasiyla ortusuyor, yoksa arada olu an oluyor.
+  const firstSwing = walkEnd;
+  const lethalSwing = mode === "tam" ? firstSwing + attackLen * 0.82 : firstSwing;
+  const blocked = mode === "tam" ? firstSwing + attackHit : null;
+  const blockStart = mode === "tam" ? blocked - BLOCK_IMPACT / SPEED.block : null;
+
+  const lethal = lethalSwing + attackHit;
+  const deathStart = lethal + 0.14;
+  const fadeStart = deathStart + DEATH_HOLD;
+  const advanceStart = lethal + 0.5;
+  const advanceEnd = advanceStart + ADVANCE;
+  const victoryStart = mode === "tam" ? advanceEnd : null;
+  // Victory 1.5 sn; tamamini beklemek oyunu yavaslatiyor, tepe noktasindan
+  // sonra Idle'a geciliyor.
+  const victoryEnd = victoryStart != null ? victoryStart + CLIP_LENGTH[CLIP.VICTORY] / SPEED.victory * 0.62 : null;
+
+  return {
+    mode,
+    power,
+    attackHit,
+    walkEnd,
+    firstSwing,
+    lethalSwing,
+    blockStart,
+    blocked,
+    lethal,
+    deathStart,
+    fadeStart,
+    advanceStart,
+    advanceEnd,
+    victoryStart,
+    victoryEnd,
+    total: Math.max(fadeStart + FADE, victoryEnd ?? advanceEnd + 0.2),
+  };
+}
+
+/**
+ * Klip kaydi ve demo bu ozeti okuyor. Sureler iki yerde yazili olsaydi
+ * dovusu her ayarlayista video kadraji kayardi.
+ */
+export function finisherTiming(type, mode = "kisa", dist = 1) {
+  const p = planFinisher(type, mode, dist);
+  return { duration: p.total, impactAt: p.lethal / p.total, power: p.power, arc: 0 };
+}
+
+/** Bir kere gecilen zaman noktasi -- cizelgeyi okunur tutuyor. */
+function cueRunner(cues) {
+  let next = 0;
+  const sorted = cues.filter((c) => c && Number.isFinite(c.t)).sort((a, b) => a.t - b.t);
+  return (t) => {
+    while (next < sorted.length && t >= sorted[next].t) sorted[next++].run();
+  };
 }
 
 /**
@@ -219,88 +158,170 @@ export function runFinisher({
   clock,
   fx = LIVE_FX,
 }) {
-  const move = MOVES[attacker.userData.type] ?? MOVES.p;
+  const type = attacker.userData.type;
   const from = squareToWorld(fromSquare);
   const to = squareToWorld(toSquare);
+  // En passant'ta kurban hedef karede DEGIL; saldiran kurbana donup vuruyor,
+  // sonra hedef kareye adim atiyor.
   const victimPos = squareToWorld(victimSquare ?? toSquare);
 
-  const baseRot = { x: attacker.rotation.x, y: attacker.rotation.y, z: attacker.rotation.z };
-  const cinematic = settings.cinematic !== false;
+  const plan = planFinisher(type, duelMode(settings), from.distanceTo(victimPos));
 
-  // Sinematik acilmis ise once kamera kurbanin yanina dalsin
+  // Kurbanin karesine girmeden onunde duruluyor -- ust uste binen iki
+  // karakter yerine karsi karsiya gelen iki figur.
+  const standoff = victimPos
+    .clone()
+    .add(from.clone().sub(victimPos).setY(0).normalize().multiplyScalar(STANDOFF));
+
+  const attackerYaw = Math.atan2(victimPos.x - from.x, victimPos.z - from.z);
+  const victimYaw = Math.atan2(standoff.x - victimPos.x, standoff.z - victimPos.z);
+  const victimYaw0 = victim ? victim.rotation.y : 0;
+
+  const cinematic = settings.cinematic !== false;
   const intro = cinematic
-    ? rig.focus(victimPos.clone().setY(0.45), { duration: 300 })
+    ? rig.focus(victimPos.clone().setY(0.55), { duration: 300 })
     : Promise.resolve();
 
   return intro.then(
     () =>
       new Promise((resolve) => {
+        const p = plan.power;
+
+        // Savurma sesi vurustan biraz once dusmeli -- darbenin "geldigini"
+        // haber veren sey bu, carpma sesinin kendisi kadar agirlik katiyor.
+        const swing = () => fx.sound("whoosh", { power: p }, Math.max(0, plan.attackHit - 0.14));
+
+        const strike = (lethal) => {
+          fx.flash({ strength: (lethal ? 0.16 : 0.08) + 0.14 * p, ms: lethal ? 200 : 130 });
+          rig.shake?.fire((lethal ? 0.16 : 0.07) * p, lethal ? 0.4 : 0.22);
+          timeScale.freeze((lethal ? 60 : 28) + 30 * p);
+          if (lethal) {
+            fx.sound("impact", { pitch: 70 + 40 / p, power: p });
+            fx.sound("dust", { power: p }, 0.09);
+          } else {
+            fx.sound("clash", { power: p });
+          }
+        };
+
+        const cues = [];
+
+        if (plan.mode === "kapali") {
+          cues.push({ t: 0, run: () => attacker.play(CLIP.WALK, { loop: true, speed: 1.4 }) });
+          cues.push({
+            t: plan.lethal,
+            run: () => {
+              strike(true);
+              victim?.play(CLIP.DEATH, { loop: false, speed: SPEED.death * 1.4, fade: 0.08 });
+            },
+          });
+          cues.push({ t: plan.walkEnd, run: () => attacker.idle(0.22) });
+        } else {
+          cues.push({
+            t: 0,
+            run: () => {
+              attacker.rotation.y = attackerYaw;
+              attacker.play(CLIP.WALK, { loop: true, speed: SPEED.walk });
+              fx.sound("step", { power: 0.6 * p });
+            },
+          });
+          cues.push({ t: plan.walkEnd * 0.55, run: () => fx.sound("step", { power: 0.6 * p }) });
+
+          if (plan.mode === "tam") {
+            cues.push({
+              t: plan.firstSwing,
+              run: () => {
+                attacker.play(CLIP.ATTACK, { loop: false, speed: SPEED.attack });
+                swing();
+              },
+            });
+            cues.push({
+              t: plan.blockStart,
+              run: () => victim?.play(CLIP.BLOCK, { loop: false, speed: SPEED.block }),
+            });
+            cues.push({ t: plan.blocked, run: () => strike(false) });
+          }
+
+          cues.push({
+            t: plan.lethalSwing,
+            run: () => {
+              attacker.play(CLIP.ATTACK, { loop: false, speed: SPEED.attack, fade: 0.1 });
+              swing();
+            },
+          });
+          cues.push({
+            t: plan.lethal,
+            run: () => {
+              strike(true);
+              victim?.play(CLIP.HIT, { loop: false, speed: SPEED.hit, fade: 0.06 });
+            },
+          });
+          cues.push({
+            t: plan.deathStart,
+            run: () => {
+              victim?.play(CLIP.DEATH, { loop: false, speed: SPEED.death, fade: 0.12 });
+              // Govdenin tahtaya carpmasi olum klibinin ortasinda; ses de orada
+              fx.sound("death", { power: p }, 0.42);
+              fx.sound("shatter", { power: p * 0.7 }, 0.5);
+            },
+          });
+          cues.push({
+            t: plan.advanceStart,
+            run: () => attacker.play(CLIP.WALK, { loop: true, speed: SPEED.walk }),
+          });
+          cues.push({
+            t: plan.advanceEnd,
+            run: () => {
+              fx.sound("place");
+              if (plan.mode === "tam") {
+                attacker.play(CLIP.VICTORY, { loop: false, speed: SPEED.victory });
+                fx.sound("victory", { power: p }, 0.18);
+              } else {
+                attacker.idle();
+              }
+            },
+          });
+          if (plan.victoryEnd != null) {
+            cues.push({ t: plan.victoryEnd, run: () => attacker.idle(0.35) });
+          }
+        }
+
+        const fire = cueRunner(cues);
         let t = 0;
-        let impacted = false;
-        let shatter = null;
 
         const tick = (dt) => {
           t += dt;
-          const k = Math.min(1, t / move.duration);
+          fire(t);
 
-          // --- saldiranin hareketi ---
-          const s = move.at(k, from, to, UP);
-          attacker.position.copy(s.pos);
-          if (s.rot) {
-            attacker.rotation.set(
-              baseRot.x + s.rot.x,
-              baseRot.y + s.rot.y,
-              baseRot.z + s.rot.z
-            );
-          }
-
-          // --- carpma ani ---
-          if (!impacted && k >= move.impactAt) {
-            impacted = true;
-
-            if (victim) {
-              shatter = createShatter(victim, {
-                seed: 1337,
-                life: 1.5,
-                power: move.power,
-              });
-              scene.add(shatter.mesh);
-              victim.visible = false;
-            }
-
-            fx.flash({ strength: 0.16 + 0.14 * move.power, ms: 200 });
-            rig.shake?.fire(move.shakeStrength, 0.4);
-            timeScale.freeze(60 + 30 * move.power);
-
-            fx.sound("impact", { pitch: 70 + 40 / move.power, power: move.power });
-            fx.sound("shatter", { power: move.power });
-            fx.sound("dust", { power: move.power }, 0.09);
-          }
-
-          if (shatter && shatter.update(dt)) {
-            scene.remove(shatter.mesh);
-            shatter.dispose();
-            shatter = null;
-          }
-
-          if (k >= 1) {
+          // --- saldiranin tahta uzerindeki yolu ---
+          if (plan.mode === "kapali") {
+            const k = Math.min(1, t / plan.walkEnd);
+            attacker.position.lerpVectors(from, to, easeInOutQuad(k));
+            attacker.position.y = Math.sin(k * Math.PI) * 0.06;
+          } else if (t < plan.walkEnd) {
+            attacker.position.lerpVectors(from, standoff, easeInOutQuad(t / plan.walkEnd));
+          } else if (t >= plan.advanceStart && t < plan.advanceEnd) {
+            const k = (t - plan.advanceStart) / ADVANCE;
+            attacker.position.lerpVectors(standoff, to, easeInOutQuad(k));
+          } else if (t >= plan.advanceEnd) {
             attacker.position.copy(to);
-            attacker.rotation.set(baseRot.x, baseRot.y, baseRot.z);
-            fx.sound("place");
+          } else {
+            attacker.position.copy(standoff);
+          }
 
-            // Parcalar hala ucuyorsa sahnede biraksin, oyun beklemesin
-            if (shatter) {
-              const leftover = shatter;
-              clock.add((d) => {
-                if (leftover.update(d)) {
-                  scene.remove(leftover.mesh);
-                  leftover.dispose();
-                  return true;
-                }
-                return false;
-              });
-            }
+          // --- kurban saldirgana donuyor ---
+          if (victim && plan.mode !== "kapali" && t < plan.lethal) {
+            const delta = THREE.MathUtils.euclideanModulo(victimYaw - victim.rotation.y + Math.PI, Math.PI * 2) - Math.PI;
+            victim.rotation.y += THREE.MathUtils.clamp(delta, -TURN_RATE * dt, TURN_RATE * dt);
+          }
 
+          // --- olen tas tahtadan siliniyor ---
+          if (victim && t >= plan.fadeStart) {
+            victim.setOpacity(1 - Math.min(1, easeOutCubic((t - plan.fadeStart) / FADE)));
+          }
+
+          if (t >= plan.total) {
+            attacker.position.copy(to);
+            if (victim) victim.setOpacity(0);
             clock.remove(tick);
             (cinematic ? rig.restore(480) : Promise.resolve()).then(resolve);
             return true;
@@ -308,25 +329,39 @@ export function runFinisher({
           return false;
         };
 
+        // Kurbanin baslangic yonu, dondurme farkini hesaplarken lazim
+        if (victim) victim.rotation.y = victimYaw0;
         clock.add(tick);
       })
   );
 }
 
-/** Yeme olmayan normal hamle -- sade kayma. */
-export function runQuietMove({ mesh, fromSquare, toSquare, clock, duration = 0.3, fx = LIVE_FX }) {
+/**
+ * Yeme olmayan normal hamle: tas hedefe dogru donup yuruyor.
+ * Rok'ta iki tas ayni anda bu yolu kullaniyor.
+ */
+export function runQuietMove({ actor, fromSquare, toSquare, clock, fx = LIVE_FX }) {
   const from = squareToWorld(fromSquare);
   const to = squareToWorld(toSquare);
+  const dist = from.distanceTo(to);
+  const duration = THREE.MathUtils.clamp(dist / MOVE_SPEED, 0.28, 0.95);
+  const yaw = Math.atan2(to.x - from.x, to.z - from.z);
+  const homeYaw = actor.homeYaw;
+
+  actor.rotation.y = yaw;
+  actor.play(CLIP.WALK, { loop: true, speed: SPEED.walk });
+  fx.sound("step", { power: 0.5 });
+
   return new Promise((resolve) => {
     let t = 0;
     const tick = (dt) => {
       t += dt;
       const k = Math.min(1, t / duration);
-      const e = easeInOutQuad(k);
-      mesh.position.lerpVectors(from, to, e);
-      mesh.position.y = Math.sin(e * Math.PI) * 0.3;
+      actor.position.lerpVectors(from, to, easeInOutQuad(k));
       if (k >= 1) {
-        mesh.position.copy(to);
+        actor.position.copy(to);
+        actor.rotation.y = homeYaw;
+        actor.idle();
         fx.sound("place");
         clock.remove(tick);
         resolve();

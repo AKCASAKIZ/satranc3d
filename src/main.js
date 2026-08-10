@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createBoard, createHighlights, squareToWorld } from "./board.js";
-import { loadPieceGeometries, PieceSet } from "./pieces.js";
+import { loadWarriors, PieceSet, attachActorClock } from "./pieces.js";
 import { Game } from "./game.js";
 import { CameraRig } from "./camera_rig.js";
 import { createUI, loadSettings } from "./ui.js";
@@ -49,6 +49,9 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.45));
 
 const timeScale = new TimeScale();
 const clock = new Clock(timeScale);
+// Iskelet animasyonlari da oyunun olcekli saatinden beslenmeli, yoksa
+// carpma aninda kamera donarken taslar oynamaya devam ediyor.
+attachActorClock(clock);
 const rig = new CameraRig(camera, controls);
 rig.shake = new Shake();
 const settings = loadSettings();
@@ -153,13 +156,13 @@ async function playMove(from, to, forced) {
       clock,
     });
   } else {
-    const anims = [runQuietMove({ mesh: attacker, fromSquare: from, toSquare: to, clock })];
+    const anims = [runQuietMove({ actor: attacker, fromSquare: from, toSquare: to, clock })];
     if (result.rook) {
-      const rookMesh = pieces.at(result.rook.from);
-      if (rookMesh) {
+      const rookActor = pieces.at(result.rook.from);
+      if (rookActor) {
         anims.push(
           runQuietMove({
-            mesh: rookMesh,
+            actor: rookActor,
             fromSquare: result.rook.from,
             toSquare: result.rook.to,
             clock,
@@ -182,11 +185,19 @@ function onPointerDown(event) {
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
 
-  // Once taslara, sonra karelere bak -- tas karenin ustunde duruyor
-  const hitPiece = raycaster.intersectObjects(pieces.group.children, false)[0];
+  // Tas artik cok parcali bir karakter, o yuzden isin alt mesh'e degiyor;
+  // hangi tas oldugunu bulmak icin ust aktore cikmak gerekiyor.
+  const hitPiece = raycaster.intersectObjects(pieces.group.children, true)[0];
   const hitSquare = raycaster.intersectObjects(scene.getObjectByName("board").children, false)[0];
 
-  const square = hitPiece?.object.userData.square ?? hitSquare?.object.userData.square ?? null;
+  // EN YAKIN isabet kazanir. "Once taslar" demek yanlis: bos bir kareye
+  // tiklayinca isin kareyi gecip arkadaki uzak bir tasa carpiyor ve oyun
+  // oraya tiklanmis saniyordu -- hamle hicbir zaman oynanmiyordu.
+  const piece = hitPiece && PieceSet.actorOf(hitPiece.object)?.userData.square;
+  const board = hitSquare?.object.userData.square;
+  let square = null;
+  if (piece && board) square = hitPiece.distance <= hitSquare.distance ? piece : board;
+  else square = piece || board || null;
   if (!square) {
     selected = null;
     highlights.clear();
@@ -239,23 +250,26 @@ function loop() {
 
 async function boot() {
   try {
-    const geometries = await loadPieceGeometries();
+    // 12 karakter GLB'si ~7 MB; sessiz beklemek yerine sayaci HUD'a yaz
+    const assets = await loadWarriors("/glb", (done, total) => {
+      statusEl.textContent = `Savascilar yukleniyor ${done}/${total}`;
+    });
 
     // Kare kare dogrulama modu -- normal oyunu hic kurmadan tek kare uretir
     const params = new URLSearchParams(location.search);
     if (params.has("demo")) {
-      await runDemo({ params, scene, settings, geometries });
+      await runDemo({ params, scene, settings, assets });
       return;
     }
 
     // Klip kayit modu -- dikey video kareleri + wav uretir, oyunu kurmaz
     if (params.has("clip")) {
       const { runRecord } = await import("./record.js");
-      await runRecord({ params, scene, settings, geometries });
+      await runRecord({ params, scene, settings, assets });
       return;
     }
 
-    pieces = new PieceSet(geometries);
+    pieces = new PieceSet(assets);
     scene.add(pieces.group);
     createUI({
       scene,

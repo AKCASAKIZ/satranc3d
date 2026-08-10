@@ -1,4 +1,5 @@
 import { THEMES, applyTheme } from "./themes.js";
+import { DUEL_MODES } from "./finishers.js";
 
 const STORE_KEY = "satranc3d.settings";
 
@@ -8,6 +9,8 @@ const DEFAULTS = {
   // "insan" = ayni ekranda iki kisi; digerleri motor seviyeleri
   opponent: "orta",
   playerColor: "w",
+  // Yeme sahnesinin uzunlugu: tam dovus guzel ama her hamlede 4 sn suruyor
+  duel: "kisa",
 };
 
 export function loadSettings() {
@@ -97,6 +100,12 @@ export function createUI({ scene, rig, settings, onOpponentChange }) {
     </div>
     <h3>Renk temasi</h3>
     <div class="swatches">${swatches}</div>
+    <h3>Oldurus</h3>
+    <div class="seg" id="duel">
+      ${Object.entries(DUEL_MODES)
+        .map(([key, label]) => `<button data-duel="${key}">${label}</button>`)
+        .join("")}
+    </div>
     <h3>Kamera</h3>
     <label class="row">
       <input type="checkbox" id="cinematic" ${settings.cinematic ? "checked" : ""}>
@@ -122,6 +131,9 @@ export function createUI({ scene, rig, settings, onOpponentChange }) {
     panel.querySelectorAll("[data-side]").forEach((b) => {
       b.classList.toggle("active", b.dataset.side === settings.playerColor);
     });
+    panel.querySelectorAll("[data-duel]").forEach((b) => {
+      b.classList.toggle("active", b.dataset.duel === settings.duel);
+    });
   };
 
   panel.addEventListener("click", (e) => {
@@ -129,6 +141,14 @@ export function createUI({ scene, rig, settings, onOpponentChange }) {
     if (s) {
       settings.theme = s.dataset.theme;
       applyTheme(scene, settings.theme);
+      markActive();
+      save(settings);
+      return;
+    }
+
+    // Dovus uzunlugu sadece gorsel; motora dokunmuyor, o yuzden ayri
+    if (e.target.closest("[data-duel]")) {
+      settings.duel = e.target.closest("[data-duel]").dataset.duel;
       markActive();
       save(settings);
       return;
