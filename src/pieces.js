@@ -266,12 +266,18 @@ export class PieceActor extends THREE.Group {
         this.materials.push(m);
         // Govde mermer/obsidyen; bronz ve koyu metal aksesuar olarak kaliyor,
         // yoksa tema degisince silah da tas rengine boyaniyor ve siluet kayboluyor.
-        // !! Kung-fu setinde govde CUBBE (`Robe_Saffron`/`Robe_Ink`); marble
-        //    yalnizca ten ve kaidede kaliyor. Robe eklenmeseydi tema rengi
-        //    govdeye hic degmez, taslar renksiz gorunurdu (olculdu 10-08-2026).
-        //    Jade ve Wood aksesuar (alin bandi, sopa) - onlar boyanmiyor,
-        //    yoksa silah da tas rengine boyanip siluet kayboluyor.
-        if (/Marble|Obsidian|Robe/.test(m.name)) this.bodyMaterials.push(m);
+        // Govde mermer/obsidyen; bronz, koyu metal, yesim ve ahsap aksesuar
+        // olarak kaliyor, yoksa tema degisince silah da tas rengine boyaniyor
+        // ve siluet kayboluyor.
+        //
+        // !! CUBBEYI (`Robe_Saffron`/`Robe_Ink`) BURAYA EKLEME. Kung-fu seti
+        //    gelince "govde artik cubbe, eklenmezse taslar renksiz kalir" diye
+        //    eklendi (10-08-2026) - YANLISTI, ekranda olculdu: tema rengi
+        //    safranin uzerine yaziyor ve beyaz taraf krem bir kutleye
+        //    donusuyor, karakterler siliniyor. Set iki tarafi zaten cubbe
+        //    rengiyle ayiriyor (safran / murekkep); tema yalnizca ten ve
+        //    kaideyi boyayinca hem ayrim hem karakter duruyor.
+        if (/Marble|Obsidian/.test(m.name)) this.bodyMaterials.push(m);
       }
     });
 
