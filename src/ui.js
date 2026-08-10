@@ -111,7 +111,7 @@ export function createUI({ scene, rig, settings, onOpponentChange }) {
       <input type="checkbox" id="cinematic" ${settings.cinematic ? "checked" : ""}>
       <span>Oldurus aninda sinematik cekim</span>
     </label>
-    <p class="hint">Drag the board to look around \u00b7 pinch or scroll to zoom.</p>
+    <p class="hint">Drag the board to look around · pinch or scroll to zoom.</p>
   `;
   root.appendChild(panel);
 

@@ -96,9 +96,9 @@ export class Game {
     if (this.chess.isCheckmate()) {
       return { over: true, text: this.turn === "w" ? "Black wins by checkmate" : "White wins by checkmate" };
     }
-    if (this.chess.isStalemate()) return { over: true, text: "Stalemate \u2014 draw" };
-    if (this.chess.isInsufficientMaterial()) return { over: true, text: "Insufficient material \u2014 draw" };
-    if (this.chess.isThreefoldRepetition()) return { over: true, text: "Threefold repetition \u2014 draw" };
+    if (this.chess.isStalemate()) return { over: true, text: "Stalemate — draw" };
+    if (this.chess.isInsufficientMaterial()) return { over: true, text: "Insufficient material — draw" };
+    if (this.chess.isThreefoldRepetition()) return { over: true, text: "Threefold repetition — draw" };
     if (this.chess.isDraw()) return { over: true, text: "Draw" };
     if (this.chess.inCheck()) {
       return { over: false, text: (this.turn === "w" ? "White" : "Black") + " is in check" };
