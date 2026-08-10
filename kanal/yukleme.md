@@ -123,26 +123,38 @@ Yeni spec eklemek tek satır; üretim klip başına ~35 sn.
 
 ---
 
-## Yükleme durumu (11 Ağustos 2026)
+## Yükleme durumu — ALTISI DA YÜKLENDİ (11 Ağustos 2026)
 
-| # | Video | Durum |
-|---|---|---|
-| 1 | The king finishes a pawn | 🟢 **canlı** · youtube.com/shorts/ZUIqe6ubDdc |
-| 2 | Queen takes rook | 🕐 13 Ağu 18:00 · shorts/YqiBC0hZtWA |
-| 3 | Knight takes bishop | 🕐 15 Ağu 18:00 · shorts/vTQ_wKF3_Y8 |
-| 4 | Rook takes queen (`rxq.mp4`) | ⬜ 18 Ağu 18:00'e planlanacak |
-| 5 | The fan beats the swords (`bxn.mp4`) | ⬜ 20 Ağu 18:00 |
-| 6 | Two novices, one square (`pxp.mp4`) | ⬜ 22 Ağu 18:00 |
+| # | Video | Yayın | Link |
+|---|---|---|---|
+| 1 | The king finishes a pawn | 🟢 **canlı** 11 Ağu | shorts/ZUIqe6ubDdc |
+| 2 | Queen takes rook | 🕐 13 Ağu 18:00 | shorts/YqiBC0hZtWA |
+| 3 | Knight takes bishop | 🕐 15 Ağu 18:00 | shorts/vTQ_wKF3_Y8 |
+| 4 | Rook takes queen | 🕐 18 Ağu 18:00 | shorts/SB0YS86Al34 |
+| 5 | The fan beats the swords | 🕐 20 Ağu 18:00 | shorts/RB3JNfiZMTI |
+| 6 | Two novices, one square | 🕐 22 Ağu 18:00 | shorts/dknZEBojy6I |
+
+Hepsi "çocuklara özel değil" işaretli, saat 18:00 (gece yarısı varsayılanı
+kötü bir yayın saati). Hat 22 Ağustos'a kadar dolu.
+
+**Deney bitiş ölçümü: 5 Eylül 2026** (son video + iki hafta).
 
 ### !! Studio arayüzünde iki SESSIZ hata (11-08-2026'da acıyla öğrenildi)
 
 Hiçbiri hata vermiyor; ekran kontrol edilmezse video yayınlanmadan taslakta kalıyor.
 
-1. **"Çocuklara özel değil" seçimi kaydolmuyor.** Tıklamadan sonra
-   `aria-checked` değerini doğrula, yoksa Görünürlük adımı kilitli kalıyor.
-2. **"Planla" tıklaması geçmiyor** — saat alanını **Escape ile kapatmak
-   seçimi geri alıyor.** Doğru sıra: önce SAAT yaz ve **Enter**'la onayla,
-   SONRA tarihi seç, sonra Planla. Bu sırayla çalışıyor.
+1. **"Çocuklara özel değil" seçimi kaydolmuyor.** Normal tıklama sessizce
+   düşüyor; `aria-checked` doğrulanmazsa Görünürlük adımı kilitli kalıyor ve
+   video taslakta unutuluyor. Gölge DOM'daki `tp-yt-paper-radio-button`
+   öğesine doğrudan `.click()` güvenilir çalıştı.
+2. **"Planla" tıklaması geçmiyor** — saat alanını **Escape ile kapatmak**
+   seçimi geri alıyor. Doğru sıra: önce SAAT yaz ve **Enter**'la onayla,
+   SONRA takvimden günü seç, sonra Planla.
+3. **Escape açılır listeyi değil PENCEREYİ kapatabiliyor** — bir videoyu
+   başlıksız taslakta bıraktı. Hashtag önerisini kapatmak için Escape yerine
+   metnin sonuna **boşluk** koy.
+4. **Alan koordinatları pencere boyutuna göre kayıyor.** Yazmadan önce ekran
+   görüntüsü al; başlık/açıklama sessizce boş kalabiliyor.
 
 ### Kalan iş: doğrulama sonrası
 
