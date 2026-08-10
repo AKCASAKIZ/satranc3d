@@ -40,12 +40,12 @@ export function createUI({ scene, rig, settings, onOpponentChange }) {
   const dock = document.createElement("div");
   dock.className = "dock";
   dock.innerHTML = `
-    <button data-rot="-1" title="Sola cevir">&#8630;</button>
-    <button data-view="beyaz" title="Beyaz tarafi">B</button>
-    <button data-view="ustten" title="Ustten">&#9633;</button>
-    <button data-view="siyah" title="Siyah tarafi">S</button>
-    <button data-rot="1" title="Saga cevir">&#8631;</button>
-    <button data-spin="1" title="Otomatik dondur" class="spin">&#8635;</button>
+    <button data-rot="-1" title="Rotate left">&#8630;</button>
+    <button data-view="beyaz" title="White side">W</button>
+    <button data-view="ustten" title="Top-down">&#9633;</button>
+    <button data-view="siyah" title="Black side">B</button>
+    <button data-rot="1" title="Rotate right">&#8631;</button>
+    <button data-spin="1" title="Auto-rotate" class="spin">&#8635;</button>
   `;
   dock.addEventListener("click", (e) => {
     const b = e.target.closest("button");
@@ -89,14 +89,14 @@ export function createUI({ scene, rig, settings, onOpponentChange }) {
   panel.innerHTML = `
     <h3>Rakip</h3>
     <div class="seg" id="opponent">
-      <button data-opp="insan">Insan</button>
-      <button data-opp="kolay">Kolay</button>
-      <button data-opp="orta">Orta</button>
-      <button data-opp="zor">Zor</button>
+      <button data-opp="insan">Human</button>
+      <button data-opp="kolay">Easy</button>
+      <button data-opp="orta">Medium</button>
+      <button data-opp="zor">Hard</button>
     </div>
     <div class="seg" id="side">
-      <button data-side="w">Beyaz oyna</button>
-      <button data-side="b">Siyah oyna</button>
+      <button data-side="w">Play White</button>
+      <button data-side="b">Play Black</button>
     </div>
     <h3>Renk temasi</h3>
     <div class="swatches">${swatches}</div>
@@ -111,7 +111,7 @@ export function createUI({ scene, rig, settings, onOpponentChange }) {
       <input type="checkbox" id="cinematic" ${settings.cinematic ? "checked" : ""}>
       <span>Oldurus aninda sinematik cekim</span>
     </label>
-    <p class="hint">Tahtayi fareyle surukleyerek de dondurebilirsin.</p>
+    <p class="hint">Drag the board to look around \u00b7 pinch or scroll to zoom.</p>
   `;
   root.appendChild(panel);
 

@@ -24,7 +24,9 @@ import { renderEventsToWav } from "./fx/audio.js";
  */
 
 const ALL_SPECS = ["pxp", "rxq", "nxb", "bxn", "qxr", "kxp"];
-const NAMES = { p: "PIYON", r: "KALE", n: "AT", b: "FIL", q: "VEZIR", k: "SAH" };
+// Klip etiketleri INGILIZCE: kanal ve portal kitlesi kuresel. Turkce
+// etiket ("VEZIR x KALE") videoyu Turkiye disinda okunmaz kiliyordu.
+const NAMES = { p: "PAWN", r: "ROOK", n: "KNIGHT", b: "BISHOP", q: "QUEEN", k: "KING" };
 
 // Kurbanin hangi kareye kondugu kadrajı belirliyor; tahtanin ortasi en genis
 // arka plani veriyor, kenarda cekince kadrajin yarisi bos kaliyor.
@@ -223,7 +225,7 @@ async function recordOne({ spec, scene, assets, settings, renderer, canvas2d, op
       h,
       flash,
       label: label ? `${NAMES[attackerType]} × ${NAMES[victimType]}` : null,
-      sub: label ? "satranc3d" : null,
+      sub: label ? "Kung-Fu Chess 3D" : null,
     });
 
     await post(

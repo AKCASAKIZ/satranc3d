@@ -86,7 +86,7 @@ function check(label, actual, expected) {
   g.move("d8", "h4"); // aptal mat
   const s = g.status();
   check("mat: oyun bitti", s.over, true);
-  check("mat: metin", s.text, "Siyah mat etti");
+  check("mat: metin", s.text, "Black wins by checkmate");
 }
 
 // --- gecersiz hamle ----------------------------------------------------

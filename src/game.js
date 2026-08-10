@@ -94,16 +94,16 @@ export class Game {
 
   status() {
     if (this.chess.isCheckmate()) {
-      return { over: true, text: this.turn === "w" ? "Siyah mat etti" : "Beyaz mat etti" };
+      return { over: true, text: this.turn === "w" ? "Black wins by checkmate" : "White wins by checkmate" };
     }
-    if (this.chess.isStalemate()) return { over: true, text: "Pat -- beraberlik" };
-    if (this.chess.isInsufficientMaterial()) return { over: true, text: "Yetersiz materyal -- beraberlik" };
-    if (this.chess.isThreefoldRepetition()) return { over: true, text: "Uc kez tekrar -- beraberlik" };
-    if (this.chess.isDraw()) return { over: true, text: "Beraberlik" };
+    if (this.chess.isStalemate()) return { over: true, text: "Stalemate \u2014 draw" };
+    if (this.chess.isInsufficientMaterial()) return { over: true, text: "Insufficient material \u2014 draw" };
+    if (this.chess.isThreefoldRepetition()) return { over: true, text: "Threefold repetition \u2014 draw" };
+    if (this.chess.isDraw()) return { over: true, text: "Draw" };
     if (this.chess.inCheck()) {
-      return { over: false, text: (this.turn === "w" ? "Beyaz" : "Siyah") + " sahta" };
+      return { over: false, text: (this.turn === "w" ? "White" : "Black") + " is in check" };
     }
-    return { over: false, text: (this.turn === "w" ? "Beyaz" : "Siyah") + " oynuyor" };
+    return { over: false, text: (this.turn === "w" ? "White" : "Black") + " to move" };
   }
 
   reset() {

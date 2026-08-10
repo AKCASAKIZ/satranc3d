@@ -1,6 +1,6 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Satranc 3D</title>
+<title>Kung-Fu Chess 3D</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; background: #151719; overflow: hidden; }
@@ -79,20 +79,20 @@
 
 <canvas id="scene"></canvas>
 <div id="hud">
-  <span id="status">Yukleniyor...</span>
-  <button id="reset">Yeni oyun</button>
+  <span id="status">Loading\u2026</span>
+  <button id="reset">New game</button>
 </div>
 <div id="flash"></div>
 <div id="ui"></div>
 
 <div id="promo" hidden>
   <div class="card">
-    <h2>Piyon terfi ediyor — hangi tas?</h2>
+    <h2>Pawn promotion \u2014 pick a piece</h2>
     <div class="row">
-      <button data-piece="q">Vezir</button>
-      <button data-piece="r">Kale</button>
-      <button data-piece="b">Fil</button>
-      <button data-piece="n">At</button>
+      <button data-piece="q">Queen</button>
+      <button data-piece="r">Rook</button>
+      <button data-piece="b">Bishop</button>
+      <button data-piece="n">Knight</button>
     </div>
   </div>
 </div>
