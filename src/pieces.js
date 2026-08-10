@@ -169,7 +169,12 @@ export function applyPieceColors(white, black) {
  * 12 GLB'yi paralel yukler. Donen nesne prototip -- her tas ondan
  * SkeletonUtils.clone ile kopyalaniyor, GLB tekrar parse edilmiyor.
  */
-export async function loadWarriors(base = "/glb", onProgress) {
+/* Varsayilan yol `/glb` DEGIL, `<BASE_URL>glb`. GitHub Pages'te oyun alt
+   dizinde duruyor (ornegin /satranc3d/); mutlak `/glb` orada site kokune
+   gider ve 12 GLB'nin hepsi 404 verir - oyun bos tahtayla acilir. */
+const GLB_KOK = `${import.meta.env.BASE_URL}glb`;
+
+export async function loadWarriors(base = GLB_KOK, onProgress) {
   const loader = new GLTFLoader();
   const jobs = [];
   for (const type of Object.keys(FILE_NAME)) {

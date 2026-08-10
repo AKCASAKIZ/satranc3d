@@ -178,7 +178,45 @@ async function playMove(from, to, forced) {
   maybeAiMove();
 }
 
+/* ---------- dokunus mu surukleme mi ---------- *
+ *
+ *  Is eskiden dogrudan `pointerdown`da yapiliyordu. Masaustunde fark
+ *  edilmiyordu ama TELEFONDA oyunu oynanmaz kiliyordu: OrbitControls tek
+ *  parmakla kamerayi donduruyor, yani tahtayi cevirmek icin yapilan her
+ *  surukleme ayni anda tas seciyor, bazen hamle oynatiyordu.
+ *
+ *  Simdi is `pointerup`ta ve yalnizca parmak/fare KAYMADIYSA yapiliyor.
+ *  Fareye de uygulaniyor: masaustunde de tasa basip kamerayi cevirmek
+ *  istemeden secim yapiyordu.
+ *
+ *  Ikinci parmak degdiginde dokunus iptal: cimdikle yakinlastirma bitince
+ *  parmaklardan biri kalkiyor ve o kalkis tek basina "dokunus" sayilirdi.
+ */
+const TAP_KAYMA = 10;          // ekran pikseli; parmak titremesi bunun altinda
+let basim = null;
+
 function onPointerDown(event) {
+  if (basim) { basim.kaydi = true; return; }   // ikinci parmak: artik dokunus degil
+  basim = { id: event.pointerId, x: event.clientX, y: event.clientY, kaydi: false };
+}
+
+function onPointerMove(event) {
+  if (!basim || event.pointerId !== basim.id || basim.kaydi) return;
+  if (Math.hypot(event.clientX - basim.x, event.clientY - basim.y) > TAP_KAYMA) {
+    basim.kaydi = true;
+  }
+}
+
+function onPointerUp(event) {
+  if (!basim || event.pointerId !== basim.id) { basim = null; return; }
+  const dokunus = !basim.kaydi;
+  basim = null;
+  if (dokunus) secimYap(event);
+}
+
+function onPointerCancel() { basim = null; }
+
+function secimYap(event) {
   if (busy || !humanTurn()) return;
   const rect = canvas.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -251,7 +289,10 @@ function loop() {
 async function boot() {
   try {
     // 12 karakter GLB'si ~7 MB; sessiz beklemek yerine sayaci HUD'a yaz
-    const assets = await loadWarriors("/glb", (done, total) => {
+    // Yol VERILMIYOR: pieces.js varsayilani `<BASE_URL>glb` uretiyor. Burada
+    // mutlak "/glb" yaziliydi ve alt dizinden servis edilince (GitHub Pages
+    // proje sitesi) 12 GLB'nin hepsi 404 veriyordu - olculdu 10-08-2026.
+    const assets = await loadWarriors(undefined, (done, total) => {
       statusEl.textContent = `Savascilar yukleniyor ${done}/${total}`;
     });
 
@@ -286,6 +327,12 @@ async function boot() {
     rig.preset(aiPlays() && settings.playerColor === "b" ? "siyah" : "beyaz");
     refresh();
     canvas.addEventListener("pointerdown", onPointerDown);
+    // move/up PENCEREYE baglaniyor, tuvale degil: parmak tuvalin disina
+    // (HUD'un ustune) cikip birakildiginda tuvalin pointerup'i hic gelmiyor
+    // ve basim takili kaliyordu - sonraki dokunus da yutuluyordu.
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
     // Tarayici otoplay kurali: AudioContext ancak kullanici etkilesiminde acilir
     const unlock = () => initAudio();
     window.addEventListener("pointerdown", unlock, { once: true });

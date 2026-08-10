@@ -75,6 +75,9 @@ function clipRecorder() {
 
 export default {
   // pieces.glb ve onizleme render'lari dogrudan servis edilsin
+  // Goreli base: oyun site kokunde de (/), alt dizinde de (/satranc3d/)
+  // ayni derlemeyle calissin. GitHub Pages proje sitesi alt dizin veriyor.
+  base: "./",
   publicDir: "assets",
   plugins: [clipRecorder()],
   server: {
