@@ -100,12 +100,26 @@ export const EK_LENGTH = {
 };
 
 /**
- * Kaide (`_Base`) acik: tahtada figurlerin satranc tasi olarak okunmasini
- * saglayan sey bu, kapatinca tahta minyatur asker dizisine donuyor.
- * Kapatilmak istenirse govde kaidenin ustunde durdugu icin ~0.11 birim
- * havada kalir; groundOffset bunu yukleme aninda olcup telafi ediyor.
+ * Kaide (`_Base`) KAPALI (11-08-2026 karari).
+ *
+ * Once acikti: gerekce "figurler satranc tasi olarak okunsun, yoksa tahta
+ * minyatur asker dizisine doner" idi. Kung-fu seti gelince bu gerekce
+ * gecersizlesti - karakterlerin eklemleri var, kendileri yuruyor ve
+ * doguuyorlar; kaide artik onlari tasiyan disk degil, ayaklarinin altindaki
+ * gereksiz bir pasta. Kapatinca tahta "savas alani" gibi okunuyor ve zaten
+ * projenin ayirt edici yani bu.
+ *
+ * Kapatmanin bedeli olculdu, ucu de sorun cikarmadi:
+ *   - Govde kaidenin ustunde duruyordu, ~0.11 birim havada kalirdi;
+ *     groundOffset yukleme aninda olcup telafi ediyor (olculdu: altY = 0.000).
+ *   - Tema rengi kaideyi de boyuyordu; ten/bas/el uzerinde hala 19.060
+ *     ucgen kaliyor, tema degisimi gorunur (olculdu).
+ *   - Tiklama hedefi kaideye BAGLI DEGIL: isin tasi iskalarsa altindaki
+ *     kareye dusuyor (bkz. secimYap, main.js).
+ *
+ * Geri acilirsa yukaridakilerin hicbiri bozulmaz, tek degisen gorunum.
  */
-const SHOW_PLINTH = true;
+const SHOW_PLINTH = false;
 
 /**
  * Kaide mesh'i mi? GLTFLoader cok primitifli mesh'i `CW_Pawn_Base_0`,
