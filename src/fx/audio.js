@@ -317,6 +317,56 @@ export const VOICES = {
     partials(bus, t, 296, [1, 2.67, 4.31], { decay: 0.13, peak: 0.13 * power, wet: 0.25 });
   },
 
+  /**
+   * Yildirim: keskin catirti + uzun alcak gurulti.
+   *
+   * Iki katman bilincli. Catirti carpma anini isaretliyor (yuksek, cok kisa);
+   * gurulti agirligi veriyor (30 Hz'e inen, 2 sn suren). Tek katmanla
+   * ya "cit" gibi ince ya "guum" gibi tepkisiz duruyor.
+   */
+  thunder(bus, t, { power = 1 } = {}) {
+    // Catirti: genis bantli, ani
+    transient(bus, t, { peak: 0.62 * power, freq: 7200, decay: 0.02 });
+    noiseBurst(bus, t, { type: "highpass", from: 3200, to: 900, decay: 0.16, peak: 0.4 * power, wet: 0.5 });
+    // Gurulti: uzun kuyruk, salonu doldursun
+    noiseBurst(bus, t + 0.03, {
+      type: "lowpass", from: 420, to: 60, attack: 0.02, decay: 1.9, peak: 0.5 * power, wet: 0.75,
+    });
+    // Sub: gogusde hissedilen kisim
+    const sub = bus.ctx.createOscillator();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(62, t);
+    sub.frequency.exponentialRampToValueAtTime(24, t + 1.2);
+    const e = envelope(bus, sub, t, { attack: 0.006, decay: 1.3, peak: 0.75 * power });
+    e.gain.connect(bus.master);
+    reverb(bus, e.gain, 0.3);
+    sub.start(t);
+    sub.stop(e.stopAt);
+  },
+
+  /**
+   * Isin: yukselen, temiz, metalik olmayan bir ton. Yildirimin tersi -
+   * o carpiyor, bu KALDIRIYOR. Bu yuzden perde yukari kayiyor ve
+   * vurus/catirti katmani YOK.
+   */
+  beam(bus, t, { power = 1 } = {}) {
+    const base = 196;
+    [1, 1.5, 2, 3].forEach((ratio, i) => {
+      const osc = bus.ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(base * ratio, t + i * 0.05);
+      osc.frequency.exponentialRampToValueAtTime(base * ratio * 2.4, t + 1.6);
+      const e = envelope(bus, osc, t + i * 0.05, {
+        attack: 0.25, hold: 0.5, decay: 1.1, peak: (0.2 / (i + 1)) * power,
+      });
+      e.gain.connect(bus.master);
+      reverb(bus, e.gain, 0.6);
+      osc.start(t + i * 0.05);
+      osc.stop(e.stopAt);
+    });
+    noiseBurst(bus, t, { type: "highpass", from: 4000, to: 9000, attack: 0.4, decay: 1.2, peak: 0.1 * power, wet: 0.8 });
+  },
+
   /** Zafer: kisa bronz fanfar. Tam dovusun sonunu kapatiyor. */
   victory(bus, t, { power = 1 } = {}) {
     [0, 0.09, 0.18].forEach((offset, i) => {

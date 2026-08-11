@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { squareToWorld } from "./board.js";
 import { flash } from "./fx/impact.js";
 import { createShatter } from "./fx/shatter.js";
+import { createLightning } from "./fx/sky.js";
 import { play } from "./fx/audio.js";
 import { CLIP, ATTACK_IMPACT, ATTACK_LENGTH, BLOCK_IMPACT, CLIP_LENGTH } from "./pieces.js";
 
@@ -148,6 +149,10 @@ function cueRunner(cues) {
  */
 /** Parcalanan taslar: agir olanlar. Piyon/at/fil sakince oluyor. */
 const PARCALANAN = new Set(["q", "k", "r"]);
+/** Yildirim SADECE vezirde. Kale de dagiliyor ama gok gurlemiyor - iki
+ *  seviye: kale "agir", vezir "olay". Ikisine de yildirim dusseydi vezirin
+ *  ozelligi kalmazdi. */
+const YILDIRIMLI = new Set(["q"]);
 
 export function runFinisher({
   scene,
@@ -278,11 +283,16 @@ export function runFinisher({
            *  Zamanlama olum klibinin govde-carpma anina (0,42 sn) bagli:
            *  once figur devriliyor, YERE CARPINCA patliyor. Once patlatmak
            *  devrilmeyi anlamsiz kilardi. */
+          const parcaAni = plan.deathStart + 0.42 / SPEED.death;
+          if (victim && YILDIRIMLI.has(victim.userData?.type)) {
+            // Yildirim parcalanmadan ONCE dusuyor: once vurus, sonra dagilma.
+            // Ters sirada "dagildi, sonra bir sey carpti" gibi okunuyor.
+            // Ara genis tutuluyor: 0,22 sn ile denendiginde parcalar simsegi
+            // ortuyordu ve simsek hic okunmuyordu.
+            cues.push({ t: parcaAni - 0.5, run: () => yildirimDusur(victim) });
+          }
           if (victim && PARCALANAN.has(victim.userData?.type)) {
-            cues.push({
-              t: plan.deathStart + 0.42 / SPEED.death,
-              run: () => parcala(victim, p),
-            });
+            cues.push({ t: parcaAni, run: () => parcala(victim, p) });
           }
           cues.push({
             t: plan.advanceStart,
@@ -333,6 +343,22 @@ export function runFinisher({
             });
           }
           kurban.visible = false;
+        };
+
+        /** Gokten yildirim: kurbanin ayagina vurur, gok gurler, ekran carpar. */
+        const yildirimDusur = (kurban) => {
+          const nokta = kurban.position.clone();
+          nokta.y = 0;
+          const bolt = createLightning(nokta, { seed: 7 });
+          scene.add(bolt.mesh);
+          clock.add((d) => {
+            if (bolt.update(d)) { scene.remove(bolt.mesh); bolt.dispose(); return true; }
+            return false;
+          });
+          fx.flash({ strength: 0.34, ms: 240 });
+          rig.shake?.fire(0.26, 0.5);
+          timeScale.freeze(90);
+          fx.sound("thunder", { power: 1 });
         };
 
         const fire = cueRunner(cues);
