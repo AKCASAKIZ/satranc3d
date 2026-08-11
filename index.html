@@ -6,6 +6,9 @@
   html, body { height: 100%; background: #151719; overflow: hidden; }
   body { font: 15px/1.4 system-ui, -apple-system, sans-serif; color: #e8e4dc; }
   #scene { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  /* Portal sarti: mobilde uzun basinca metin secimi ve vurgulama cikmasin */
+  html, body { -webkit-user-select: none; user-select: none;
+               -webkit-tap-highlight-color: transparent; }
   #hud {
     position: fixed; top: 16px; left: 16px; display: flex; gap: 12px; align-items: center;
     background: rgba(20,22,25,.78); border: 1px solid #34383d; border-radius: 10px;
@@ -112,8 +115,21 @@
 <!-- !! `path` OZELLESTIRILMIYOR. Once burada ?s=... elle ekleniyordu; canlida
      yol `/satranc3d/?s=yt?s=yt` diye CIFT cikti - GoatCounter sorgu dizesini
      zaten kendisi ekliyor. Eklemeye kalkma. -->
-<script data-goatcounter="https://whitegum.goatcounter.com/count"
-        async src="//gc.zgo.at/count.js"></script>
+<script>
+  /* GoatCounter YALNIZCA kendi sitemizde.
+     CrazyGames'te oyun portalin alan adinda calisiyor; orada ucuncu taraf
+     analitik hem gereksiz (portalin kendi olcumu var) hem de teknik
+     incelemede "dis istek" olarak isaretlenebiliyor.
+     Protokol-goreli "//" yerine acik https: paketten dosya olarak
+     acildiginda "//" file: protokolune cozulup istegi olduruyor. */
+  if (!/(^|\.)crazygames\.(com|nl)$/.test(location.hostname)) {
+    var _gc = document.createElement("script");
+    _gc.async = true;
+    _gc.src = "https://gc.zgo.at/count.js";
+    _gc.setAttribute("data-goatcounter", "https://whitegum.goatcounter.com/count");
+    document.head.appendChild(_gc);
+  }
+</script>
 
 <canvas id="scene"></canvas>
 <div id="hud">
