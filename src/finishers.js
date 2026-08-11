@@ -33,9 +33,36 @@ const easeInOutQuad = (k) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) 
 const easeOutCubic = (k) => 1 - Math.pow(1 - k, 3);
 
 /** Klip oynatma hizlari. Ham klipler sinematik tempoda; oyun icin sikilastirildi. */
-const SPEED = { walk: 1.0, attack: 1.3, block: 1.3, hit: 1.3, death: 1.35, victory: 1.35 };
+/* walk burada YOK: yurume hizi artik yer hizindan turetiliyor (yuruHizi). */
+const SPEED = { attack: 1.3, block: 1.3, hit: 1.3, death: 1.35, victory: 1.35 };
 
-const MOVE_SPEED = 2.6; // kare/sn -- tahtada yurume hizi
+/* Tahtada yurume hizi (kare/sn).
+   2.6 idi; kaide disklerini kaldirinca ayaklar ortaya cikti ve taslar
+   "yuruyen" degil "suzulen" gorundu. Asagidaki olcumle birlikte dusuruldu. */
+const MOVE_SPEED = 1.6;
+
+/* Klibin KENDI yurume hizi -- olculdu (11-08-2026, tarayicida footL/footR'nin
+   pelvise gore ilerleme ekseni gezinmesi):
+     Walk klibi 1.542 sn, adim boyu 0.283 kare, dongude 2 adim = 0.566 kare
+     => 1x hizda saniyede 0.566 / 1.542 = ~0.367 kare.
+   Klip bunun disinda bir yer hiziyla oynatilirsa ayaklar kayiyor. Eskiden
+   klip SABIT 1.0 hizla oynuyordu, taslar ise 2.6 kare/sn suzuluyordu:
+   ayaklar yer hizinin YEDIDE BIRI kadar adiliyordu. */
+const WALK_KARE_SN = 0.566 / 1.542;
+
+/**
+ * Yer hizina karsilik gelen klip oynatma hizi.
+ *
+ * Kirpma sart: uzun hamlelerde (kale bir ucdan digerine) tam esleme 7x'e
+ * cikiyor ve bacaklar dikis makinesine donuyor. Kirpilinca uzun hamlelerde
+ * bir miktar kayma kaliyor - bilincli takas, kisa hamleler dogru gorunuyor
+ * ve hamlelerin cogu kisa.
+ */
+function yuruHizi(kareSn) {
+  // Tavan 4.0: klip 1.542 sn, 4x'te dongu 0.39 sn = saniyede ~2.6 adim.
+  // Bu kosu temposu, hala insani. Daha yukarisi dikis makinesi gibi duruyor.
+  return THREE.MathUtils.clamp(kareSn / WALK_KARE_SN, 1, 4.0);
+}
 const STANDOFF = 0.8; // kurbanin karesine bu kadar yaklasip duruyor
 const ADVANCE = 0.42; // olduruksen sonra hedef kareye adim suresi
 const DEATH_HOLD = 0.8; // olum klibinin oynatilan kismi
@@ -76,6 +103,8 @@ export function planFinisher(type, mode = "kisa", dist = 1) {
       mode,
       power,
       walkEnd: slide,
+      yaklasmaKareSn: dist / slide,
+      ilerlemeKareSn: 0,
       lethal: slide * 0.72,
       fadeStart: slide * 0.72,
       total: slide + FADE * 0.7,
@@ -110,6 +139,9 @@ export function planFinisher(type, mode = "kisa", dist = 1) {
     power,
     attackHit,
     walkEnd,
+    // Klip hizi bunlara baglaniyor (bkz. yuruHizi)
+    yaklasmaKareSn: approach / walkEnd,
+    ilerlemeKareSn: STANDOFF / ADVANCE,
     firstSwing,
     lethalSwing,
     blockStart,
@@ -215,7 +247,7 @@ export function runFinisher({
         const cues = [];
 
         if (plan.mode === "kapali") {
-          cues.push({ t: 0, run: () => attacker.play(CLIP.WALK, { loop: true, speed: 1.4 }) });
+          cues.push({ t: 0, run: () => attacker.play(CLIP.WALK, { loop: true, speed: yuruHizi(plan.yaklasmaKareSn) }) });
           cues.push({
             t: plan.lethal,
             run: () => {
@@ -229,7 +261,7 @@ export function runFinisher({
             t: 0,
             run: () => {
               attacker.rotation.y = attackerYaw;
-              attacker.play(CLIP.WALK, { loop: true, speed: SPEED.walk });
+              attacker.play(CLIP.WALK, { loop: true, speed: yuruHizi(plan.yaklasmaKareSn) });
               fx.sound("step", { power: 0.6 * p });
             },
           });
@@ -296,7 +328,7 @@ export function runFinisher({
           }
           cues.push({
             t: plan.advanceStart,
-            run: () => attacker.play(CLIP.WALK, { loop: true, speed: SPEED.walk }),
+            run: () => attacker.play(CLIP.WALK, { loop: true, speed: yuruHizi(plan.ilerlemeKareSn) }),
           });
           cues.push({
             t: plan.advanceEnd,
@@ -420,12 +452,12 @@ export function runQuietMove({ actor, fromSquare, toSquare, clock, fx = LIVE_FX 
   const from = squareToWorld(fromSquare);
   const to = squareToWorld(toSquare);
   const dist = from.distanceTo(to);
-  const duration = THREE.MathUtils.clamp(dist / MOVE_SPEED, 0.28, 0.95);
+  const duration = THREE.MathUtils.clamp(dist / MOVE_SPEED, 0.35, 1.5);
   const yaw = Math.atan2(to.x - from.x, to.z - from.z);
   const homeYaw = actor.homeYaw;
 
   actor.rotation.y = yaw;
-  actor.play(CLIP.WALK, { loop: true, speed: SPEED.walk });
+  actor.play(CLIP.WALK, { loop: true, speed: yuruHizi(dist / duration) });
   fx.sound("step", { power: 0.5 });
 
   return new Promise((resolve) => {
