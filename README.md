@@ -79,3 +79,29 @@ Sadece klip isimlerini ve vuruş karelerini bilmen yeterli — taş tipine göre
 - Kale ve şahın kalkan/silah genişliği kare sınırını ~0.02 birim aşıyor; komşu kareyle görsel çakışma olabilirse kalkanı biraz içeri alabilirim.
 - `Death` klibinde gövde ~1.0–1.2 birim geriye uzanıyor. Taş zaten tahtadan kaldırılacağı için sorun değil, ama isterseniz daha derli toplu bir "yere yığılma" versiyonu yapılabilir.
 - Doku (UV/texture) yok; renkler materyal bazlı. PBR doku istersen ayrıca eklenebilir.
+
+## Parçalanma — ağır taşlar dağılıyor
+
+`src/fx/shatter.js` kurbanın **kendi geometrisini** üçgenlerine ayırıp savuruyor;
+jenerik toz bulutu değil, gerçekten o taşın parçaları. Hareketin tamamı vertex
+shader'da: tek draw call, mobilde bedava. Rastgelelik sabit tohumlu, yani klip
+kaydı kare kare aynı çıkıyor.
+
+**Sadece ağır taşlarda** (`PARCALANAN = q, k, r`). Sebep: bir partide 20-30 yeme
+oluyor; her birinde aynı gösteriyi oynatmak beşincide yormaya başlıyor. Taban
+değil **tavan** yükseltiliyor — piyon sakince ölüyor, vezir dağılıyor. Nadir
+olduğu için etkisini koruyor.
+
+Zamanlama ölüm klibinin **gövde-çarpma anına** bağlı (0,42 sn): önce figür
+devriliyor, yere çarpınca patlıyor. Önce patlatmak devrilmeyi anlamsız kılardı.
+
+> !! **Poz pişirilmeden patlatılamaz.** Taşlar `SkinnedMesh` ve geometri BIND
+> pozunda duruyor; ham geometriyi patlatırsan parçalar yatmış karakterin değil
+> AYAKTA duranın parçaları olur ve ilk karede görünür bir sıçrama çıkar.
+> `pozuPisir()` `applyBoneTransform` ile o anki pozu düz geometriye çeviriyor.
+> Ucuz çalışıyor çünkü set **rigid skinli** (her tepe noktası tek kemiğe %100),
+> yani sonuç yaklaşım değil tam.
+
+> Parçalar oyunun **ölçekli saatinden** besleniyor (`clock`), gerçek zamandan
+> değil: yavaş çekimde ve donmada havada asılı kalıyorlar, sahneden kopmuyorlar.
+

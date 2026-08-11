@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { squareToWorld } from "./board.js";
 import { flash } from "./fx/impact.js";
+import { createShatter } from "./fx/shatter.js";
 import { play } from "./fx/audio.js";
 import { CLIP, ATTACK_IMPACT, ATTACK_LENGTH, BLOCK_IMPACT, CLIP_LENGTH } from "./pieces.js";
 
@@ -145,6 +146,9 @@ function cueRunner(cues) {
  * Bir yeme sahnesini bastan sona oynatir.
  * Cozulmesi animasyon bitince olur; main.js bu sure boyunca girdiyi kilitliyor.
  */
+/** Parcalanan taslar: agir olanlar. Piyon/at/fil sakince oluyor. */
+const PARCALANAN = new Set(["q", "k", "r"]);
+
 export function runFinisher({
   scene,
   attacker,
@@ -264,6 +268,22 @@ export function runFinisher({
               fx.sound("shatter", { power: p * 0.7 }, 0.5);
             },
           });
+          /* --- BUYUK TASLARDA PARCALANMA --- *
+           *
+           *  Her yemede ayni gosteriyi oynatmak yormanin en hizli yolu: bir
+           *  partide 20-30 yeme oluyor. Bu yuzden TABAN degil TAVAN
+           *  yukseltiliyor - piyon sakince oluyor, vezir/sah/kale dagiliyor.
+           *  Nadir oldugu icin etkisini koruyor.
+           *
+           *  Zamanlama olum klibinin govde-carpma anina (0,42 sn) bagli:
+           *  once figur devriliyor, YERE CARPINCA patliyor. Once patlatmak
+           *  devrilmeyi anlamsiz kilardi. */
+          if (victim && PARCALANAN.has(victim.userData?.type)) {
+            cues.push({
+              t: plan.deathStart + 0.42 / SPEED.death,
+              run: () => parcala(victim, p),
+            });
+          }
           cues.push({
             t: plan.advanceStart,
             run: () => attacker.play(CLIP.WALK, { loop: true, speed: SPEED.walk }),
@@ -284,6 +304,36 @@ export function runFinisher({
             cues.push({ t: plan.victoryEnd, run: () => attacker.idle(0.35) });
           }
         }
+
+        /* Kurbani parcalara ayirir. Kurban tek mesh degil: govde + kaide,
+           her biri cok primitifli. Hepsi ayri patlatilip figur gizleniyor.
+           Parcalar oyunun OLCEKLI saatinden besleniyor (clock) - yavas cekim
+           ya da donma sirasinda havada asili kalsinlar, oyundan kopmasinlar. */
+        const parcala = (kurban, guc) => {
+          const parcalar = [];
+          kurban.traverse((o) => {
+            if (o.isMesh && o.visible && o.geometry?.attributes?.position) parcalar.push(o);
+          });
+          if (!parcalar.length) return;
+          let tohum = 1337;
+          for (const mesh of parcalar) {
+            let s;
+            try {
+              s = createShatter(mesh, { seed: tohum++, life: 1.6, power: 0.9 + guc * 0.6 });
+            } catch {
+              continue;            // bir parca patlamazsa sahne durmasin
+            }
+            // Parcalar mesh'in DUNYA konumunda dogsun: geometri yerel uzayda
+            mesh.updateWorldMatrix(true, false);
+            s.mesh.applyMatrix4(mesh.matrixWorld);
+            scene.add(s.mesh);
+            clock.add((d) => {
+              if (s.update(d)) { scene.remove(s.mesh); s.dispose(); return true; }
+              return false;
+            });
+          }
+          kurban.visible = false;
+        };
 
         const fire = cueRunner(cues);
         let t = 0;
