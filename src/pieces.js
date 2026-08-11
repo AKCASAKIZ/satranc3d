@@ -144,6 +144,33 @@ export const PIECE_TINT = { w: new THREE.Color(0xf2ece0), b: new THREE.Color(0x3
 /** Sahnede yasayan butun aktorler -- mixer surme ve tema yayma icin. */
 const liveActors = new Set();
 
+/* Bas cevirme her karede her tas icin calisiyor; gecici vektor/quaternion
+   tahsisi cop toplayiciyi tetikliyordu. Modul duzeyinde tekrar kullaniliyor. */
+const _v1 = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
+const _q1 = new THREE.Quaternion();
+const _q2 = new THREE.Quaternion();
+
+/**
+ * Bir noktaya bakilmasini soyler: `renk` tarafindaki, `yaricap` icindeki
+ * butun taslar basini o yone cevirir.
+ *
+ * Kurbanin ARKADASLARI icin -- dusen taşi kendi tarafinin fark etmesi,
+ * tahtayi "canli" hissettiren en ucuz hamle.
+ */
+export function kalabalikBaksin(nokta, { renk, yaricap = 4.5, sure = 1.6, haric = [] } = {}) {
+  for (const a of liveActors) {
+    if (renk && a.userData?.color !== renk) continue;
+    if (haric.includes(a)) continue;
+    if (a.position.distanceTo(nokta) > yaricap) continue;
+    // Uzaktakiler biraz gec donsun: hepsi ayni anda donunce mekanik duruyor.
+    // !! Gecikme setTimeout ILE OLMAZ. Bu projede zaman OLCEKLI saatten
+    //    geliyor; hit-stop ve yavas cekimde donus de yavaslamali, klip
+    //    kaydinda ise saat elle adimlaniyor ve gercek zaman hic akmiyor.
+    a.bakisAc(nokta, sure, a.position.distanceTo(nokta) * 0.06);
+  }
+}
+
 /** Idle fazlarini dagitmak icin sayac; bkz. PieceActor kurucusu. */
 let idleSeed = 0;
 
@@ -311,6 +338,14 @@ export class PieceActor extends THREE.Group {
     }
     this.current = null;
 
+    // Bas cevirme icin (bkz. bakisAc). Kemik yoksa ozellik sessizce kapali.
+    this.headBone = null;
+    this.model.traverse((o) => { if (o.isBone && o.name === "head") this.headBone = o; });
+    this.bakisHedef = null;   // dunya noktasi
+    this.bakisBitis = 0;      // saniye cinsinden kalan sure
+    this.bakisGecikme = 0;    // donuse baslamadan once beklenen sure
+    this.bakisAci = 0;        // suanki yaw sapmasi (yumusatilmis)
+
     this.applyTint();
     liveActors.add(this);
 
@@ -393,6 +428,61 @@ export class PieceActor extends THREE.Group {
 
   update(dt) {
     this.mixer.update(dt);
+    this.basiGuncelle(dt);
+  }
+
+  /**
+   * Bir dunya noktasina bakmaya basla. Sure dolunca bas kendiliginden
+   * one doner.
+   */
+  bakisAc(nokta, sure = 1.6, gecikme = 0) {
+    if (!this.headBone) return;
+    this.bakisHedef = nokta.clone();
+    this.bakisBitis = sure;
+    this.bakisGecikme = gecikme;
+  }
+
+  /**
+   * Bas cevirme.
+   *
+   * !! Mikserden SONRA cagrilmali: klip her karede kemik donuslerini bastan
+   *    yaziyor, once uygulanan her sey siliniyor.
+   *
+   * Donus DUNYA Y ekseninde yapiliyor ve eslenik donusumle kemigin ebeveyn
+   * uzayina tasiniyor (localQ_yeni = Q_eksen * localQ). Boylece rig'in kemik
+   * eksenlerinin hangi yone baktigini bilmek gerekmiyor - bu rig'de bone
+   * eksenleri Blender'dan geliyor ve varsaymak kirilgan olurdu.
+   */
+  basiGuncelle(dt) {
+    const kemik = this.headBone;
+    if (!kemik) return;
+
+    let hedefAci = 0;
+    if (this.bakisHedef && this.bakisGecikme > 0) {
+      this.bakisGecikme -= dt;                 // henuz donmeye baslamadi
+    } else if (this.bakisHedef) {
+      this.bakisBitis -= dt;
+      if (this.bakisBitis <= 0) this.bakisHedef = null;
+      else {
+        const d = _v1.copy(this.bakisHedef).sub(this.position).setY(0);
+        if (d.lengthSq() > 1e-6) {
+          const istenen = Math.atan2(d.x, d.z);
+          let sapma = istenen - this.rotation.y;
+          // en kisa yon
+          sapma = Math.atan2(Math.sin(sapma), Math.cos(sapma));
+          // Boyun kirilmasin: gercek bir bas ~70 dereceden fazla donmuyor
+          hedefAci = THREE.MathUtils.clamp(sapma, -1.22, 1.22);
+        }
+      }
+    }
+    // Yumusatma: ani sicrama "bakti" degil "kafasi takildi" gibi duruyor
+    const hiz = 1 - Math.exp(-dt * 9);
+    this.bakisAci += (hedefAci - this.bakisAci) * hiz;
+    if (Math.abs(this.bakisAci) < 1e-4) return;
+
+    kemik.parent.getWorldQuaternion(_q1);
+    _v2.set(0, 1, 0).applyQuaternion(_q1.invert());
+    kemik.quaternion.premultiply(_q2.setFromAxisAngle(_v2, this.bakisAci));
   }
 
   dispose() {

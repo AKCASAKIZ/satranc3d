@@ -4,7 +4,7 @@ import { flash } from "./fx/impact.js";
 import { createShatter } from "./fx/shatter.js";
 import { createLightning } from "./fx/sky.js";
 import { play } from "./fx/audio.js";
-import { CLIP, ATTACK_IMPACT, ATTACK_LENGTH, BLOCK_IMPACT, CLIP_LENGTH } from "./pieces.js";
+import { CLIP, ATTACK_IMPACT, ATTACK_LENGTH, BLOCK_IMPACT, CLIP_LENGTH, kalabalikBaksin } from "./pieces.js";
 
 /**
  * Efekt kanali. Canli oyunda ekrana/hoparlore gider; klip kaydinda ayni
@@ -315,6 +315,18 @@ export function runFinisher({
            *  Zamanlama olum klibinin govde-carpma anina (0,42 sn) bagli:
            *  once figur devriliyor, YERE CARPINCA patliyor. Once patlatmak
            *  devrilmeyi anlamsiz kilardi. */
+          // Kurbanin ARKADASLARI dustugu yere baksin. Olum klibi basladiktan
+          // hemen sonra: once dusen gorulsun, sonra tepki gelsin.
+          if (victim) {
+            cues.push({
+              t: plan.deathStart + 0.12,
+              run: () => kalabalikBaksin(victimPos, {
+                renk: victim.userData?.color,
+                haric: [victim, attacker],
+              }),
+            });
+          }
+
           const parcaAni = plan.deathStart + 0.42 / SPEED.death;
           if (victim && YILDIRIMLI.has(victim.userData?.type)) {
             // Yildirim parcalanmadan ONCE dusuyor: once vurus, sonra dagilma.

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createBoard, createHighlights, squareToWorld } from "./board.js";
-import { loadWarriors, PieceSet, attachActorClock, CLIP } from "./pieces.js";
+import { loadWarriors, PieceSet, attachActorClock, CLIP, kalabalikBaksin } from "./pieces.js";
 import { Game } from "./game.js";
 import { CameraRig } from "./camera_rig.js";
 import { createUI, loadSettings, saveSettings } from "./ui.js";
@@ -218,6 +218,8 @@ function matSahnesi(kazanan) {
 if (import.meta.env?.DEV) {
   window.__mat = (kazanan = "w") => matSahnesi(kazanan);
   window.__sahne = () => scene;
+  window.__bak = (x = 0, z = 2.5, renk = "w") =>
+    kalabalikBaksin(new THREE.Vector3(x, 0.5, z), { renk, yaricap: 5, sure: 4 });
   // Sekme arka plandayken requestAnimationFrame calismiyor; sahneyi
   // gozlemleyebilmek icin saati ELLE ilerletme kancasi.
   window.__adim = (dt = 1 / 60, kere = 60) => {
