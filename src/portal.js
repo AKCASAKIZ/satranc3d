@@ -24,12 +24,27 @@ let sdk = null;          // yalnizca portalda/localhost'ta ve init basarili ise 
 let oynaniyor = false;   // gameplayStart/Stop cift cagrilmasin
 let sonReklam = 0;       // ms; midgame reklam araligini biz de gozetiyoruz
 
-/** Portal betigi yuklenmeli mi? SDK'dan ONCE karar verilmeli. */
+/**
+ * Portal betigi yuklenmeli mi? SDK'dan ONCE karar verilmeli.
+ *
+ * !! TLD'yi SABIT LISTEYLE yazma. Ilk surumde `(com|nl)` yaziliydi; oysa
+ *    CrazyGames onlarca ulke alan adi kullaniyor -- crazygames.fr, .jp, .pl,
+ *    .se, .cz, .ru, .com.br, .com.ua, .co.id ... Oyun QA'da www.crazygames.com
+ *    ustunde calistigi icin sorun gorunmuyordu, ama Fransiz/Japon/Brezilya
+ *    trafiginde SDK HIC YUKLENMEYECEKTI: ne gameplayStart, ne reklam, ne ses
+ *    kisma. Basic launch'tan Full'e terfi tam da o trafigin KPI'larina bakiyor.
+ *    Dokumanin kendi ifadesi: "*.crazygames.com where the wildcard can be a
+ *    TLD consisting of 1 or 2 parts like .fr or .com.br".
+ */
 function portaldaMiyiz() {
   const h = location.hostname;
   if (new URLSearchParams(location.search).has("useLocalSdk")) return true;
   if (h === "localhost" || h === "127.0.0.1") return true;
-  return /(^|\.)crazygames\.(com|nl)$/.test(h);
+  // crazygames.<tld> ya da crazygames.com.<tld> / crazygames.co.<tld>.
+  // Iki parcali TLD'nin ilk parcasi SERBEST BIRAKILAMAZ: `[a-z]{2,4}\.[a-z]{2,4}`
+  // yazilirsa `crazygames.evil.com` de esleşiyor ve saldirganin sayfasina
+  // ucuncu taraf betik yukluyoruz.
+  return /(^|\.)crazygames\.([a-z]{2,4}|(com|co|net|org)\.[a-z]{2,3})$/i.test(h);
 }
 
 function betigiYukle() {
