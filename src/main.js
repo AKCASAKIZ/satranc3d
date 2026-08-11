@@ -8,10 +8,14 @@ import { createUI, loadSettings, saveSettings } from "./ui.js";
 import { createBeam } from "./fx/sky.js";
 import { Clock } from "./clock.js";
 import { TimeScale, Shake } from "./fx/impact.js";
-import { initAudio, play as playSound } from "./fx/audio.js";
+import { initAudio, play as playSound, sustur, sesiAc } from "./fx/audio.js";
 import { runFinisher, runQuietMove } from "./finishers.js";
 import { runDemo } from "./demo.js";
 import { AI } from "./ai.js";
+import {
+  portalBaslat, portalVarMi, yuklemeBasladi, yuklemeBitti,
+  oyunBasladi, oyunDurdu, keyifAni, reklamIste,
+} from "./portal.js";
 
 const canvas = document.getElementById("scene");
 const statusEl = document.getElementById("status");
@@ -239,6 +243,10 @@ function sonPerdeAc(s) {
   if (!el || !el.hidden) return;                 // ayni oyunda iki kez acilmasin
   const sonuc = sonucuIsle(s);
   olay("oyun-bitti-" + (sonuc || "insan"));
+  // Portal reklam zamanlamasini buna gore yapiyor: "durdu" demezsek
+  // oyuncunun dusundugu anda reklam gosterebiliyor.
+  oyunDurdu();
+  if (sonuc === "win") keyifAni();
   uyarla(sonuc);
   document.getElementById("sonBaslik").textContent = s.text;
   document.getElementById("sonAlt").textContent =
@@ -248,15 +256,74 @@ function sonPerdeAc(s) {
   setTimeout(() => { el.hidden = false; }, bekle);
 }
 
-function yeniOyun() {
-  const el = document.getElementById("son");
-  if (el) el.hidden = true;
-  generation++;
-  game.reset();
-  selected = null;
-  highlights.clear();
-  refresh();
-  maybeAiMove();
+/**
+ * Rovans. Reklam BURADA gosteriliyor: oyunun tek dogal molasi bu.
+ *
+ * !! Mac ortasinda reklam YOK. Satrancta dusunme ani oyunun kendisi; onu
+ *    kesmek oyuncuyu kaciriyor. Portalin 3 dakika kurali da zaten portal.js
+ *    icinde gozetiliyor, erken istek `adCooldown` ile bosa gidiyor.
+ */
+/**
+ * Ipucu: motoru oyuncunun tarafi icin calistirip en iyi hamleyi vurgular.
+ *
+ * ODULLU REKLAMIN karsiligi bu. Secildi cunku satrancta ipucu oyuncunun
+ * zaten istedigi sey; oyunu once kotulestirip sonra reklamla duzelten
+ * kaliplardan (hamle geri alma hakki, sure, kilitli tema) farkli olarak
+ * kimseyi cezalandirmiyor. Portal yoksa (kendi sitemiz) reklam da yok,
+ * ipucu bedava veriliyor - orada gosterilecek reklam zaten mevcut degil.
+ *
+ * Motor HEP "zor" seviyede sorulur: ipucu, rakibin ayarlanmis zorlugundan
+ * bagimsiz olarak gercekten en iyi hamle olmali.
+ */
+let ipucuSuruyor = false;
+async function ipucuVer() {
+  if (ipucuSuruyor || busy || game.isOver || !humanTurn()) return;
+  ipucuSuruyor = true;
+  const dugme = document.getElementById("ipucu");
+  dugme.disabled = true;
+  const mine = generation;
+  try {
+    if (portalVarMi()) {
+      const izlendi = await reklamIste("rewarded", { sustur, ac: sesiAc });
+      // !! Odul YALNIZCA reklam bitince. Hata/atlama durumunda ipucu yok.
+      if (!izlendi) return;
+    }
+    olay("ipucu");
+    const cevap = await ai.think(game.fen, "zor", 0);
+    if (mine !== generation || !cevap.move) return;
+    selected = cevap.move.from;
+    highlights.show(cevap.move.from, [{ square: cevap.move.to }]);
+  } catch (err) {
+    console.warn("ipucu", err);
+  } finally {
+    ipucuSuruyor = false;
+    dugme.disabled = false;
+  }
+}
+
+let rovansSuruyor = false;
+async function yeniOyun() {
+  // Reklam oynarken perde kapali ve tahta hala eski oyunu gosteriyor;
+  // korumasiz birakilirsa oyuncu tekrar tiklayip ikinci reklam istiyor.
+  if (rovansSuruyor) return;
+  rovansSuruyor = true;
+  try {
+    const el = document.getElementById("son");
+    if (el) el.hidden = true;
+    if (portalVarMi()) {
+      // Ses reklam boyunca kismali, yoksa portal oyunu reddediyor
+      await reklamIste("midgame", { sustur, ac: sesiAc });
+    }
+    generation++;
+    game.reset();
+    selected = null;
+    highlights.clear();
+    refresh();
+    oyunBasladi();
+    maybeAiMove();
+  } finally {
+    rovansSuruyor = false;
+  }
 }
 
 /** Sira motordaysa dusundurup hamlesini oynatir. */
@@ -470,6 +537,10 @@ function loop() {
 
 async function boot() {
   try {
+    // Portal once baslatilmali: yukleme sayaci ona da bildirilecek.
+    // Portal yoksa hepsi sessizce hicbir sey yapmiyor.
+    await portalBaslat();
+    yuklemeBasladi();
     // 12 karakter GLB'si ~7 MB; sessiz beklemek yerine sayaci HUD'a yaz
     // Yol VERILMIYOR: pieces.js varsayilani `<BASE_URL>glb` uretiyor. Burada
     // mutlak "/glb" yaziliydi ve alt dizinden servis edilince (GitHub Pages
@@ -481,6 +552,7 @@ async function boot() {
     // Kare kare dogrulama modu -- normal oyunu hic kurmadan tek kare uretir
     const params = new URLSearchParams(location.search);
     if (params.has("demo")) {
+      yuklemeBitti();
       await runDemo({ params, scene, settings, assets });
       return;
     }
@@ -488,6 +560,7 @@ async function boot() {
     // Klip kayit modu -- dikey video kareleri + wav uretir, oyunu kurmaz
     if (params.has("clip")) {
       const { runRecord } = await import("./record.js");
+      yuklemeBitti();
       await runRecord({ params, scene, settings, assets });
       return;
     }
@@ -524,6 +597,7 @@ async function boot() {
       if (busy) return;
       yeniOyun();
     });
+    document.getElementById("ipucu").addEventListener("click", ipucuVer);
     document.getElementById("sonRovans").addEventListener("click", yeniOyun);
     document.getElementById("sonTaraf").addEventListener("click", () => {
       settings.playerColor = settings.playerColor === "w" ? "b" : "w";
@@ -531,6 +605,8 @@ async function boot() {
       rig.preset(aiPlays() && settings.playerColor === "b" ? "siyah" : "beyaz");
       yeniOyun();
     });
+    yuklemeBitti();
+    oyunBasladi();
     loop();
     maybeAiMove();
   } catch (err) {

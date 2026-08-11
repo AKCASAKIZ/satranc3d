@@ -417,6 +417,20 @@ export function setVolume(v) {
   if (liveBus) liveBus.master.gain.value = v;
 }
 
+/* Reklam boyunca susturma. Sabit bir degere donmek yerine ONCEKI seviye
+   hatirlaniyor: ileride bir ses ayari eklenirse reklam sonrasi onu ezmesin. */
+let susturmaOnceki = null;
+export function sustur() {
+  if (!liveBus || susturmaOnceki !== null) return;
+  susturmaOnceki = liveBus.master.gain.value;
+  liveBus.master.gain.value = 0;
+}
+export function sesiAc() {
+  if (!liveBus || susturmaOnceki === null) return;
+  liveBus.master.gain.value = susturmaOnceki;
+  susturmaOnceki = null;
+}
+
 /** Canli ses: type + gecikme (saniye). Ses acilmadiysa sessizce yutulur. */
 export function play(type, opts = {}, delay = 0) {
   if (!liveBus) return;
