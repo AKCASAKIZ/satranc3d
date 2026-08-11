@@ -1,7 +1,23 @@
 # CrazyGames gönderimi — Kung-Fu Chess 3D
 
-**Durum (11 Ağustos 2026):** paket hazır, **yüklenmedi**. Yükleme
-developer.crazygames.com üzerinden ve hesap girişiyle yapılıyor.
+**Durum (11 Ağustos 2026, akşam):** oyun kaydı açıldı, yapı YÜKLENDİ ve QA'da
+test edildi. Kalan: QA kontrol listesi → Details → Submit.
+
+- Oyun: `Kung-Fu Chess 3D` · HTML5 · **Basic Launch** · durum **Draft**
+- Yüklü yapı: `5a4bf669` (paket `index-D4sPr0UH.js`)
+- Portal URL: developer.crazygames.com/games/1ad63a0f-c4aa-4bb0-8ed9-73548053c2ad
+
+**QA'da bizzat doğrulananlar:**
+- Oyun portalda açıldı, hamle oynandı, **motor cevap verdi** (`ai.worker`
+  onların sunucusunda çalışıyor - en büyük riskti)
+- **Hint butonu çalıştı** (Basic launch düzeltmesi tuttu)
+- Açılış 3,8 sn · toplam 12,4 MB · yükleme 3,4 MB · uyarı listesi boş
+- Portal SDK'nın dört işlevini de algıladı: Mute audio support,
+  Loading Start, Loading Stop, Gameplay Start
+
+**Full Launch SEÇİLEMİYOR.** Üç yolla denendi, buton devre dışı görünmüyor
+ama seçim Basic'te kalıyor. Basic yeni oyunlar için zorunlu ilk aşama;
+Full oradan terfi.
 
 **Paket:** `kungfu-chess-crazygames.zip` — 3,4 MB sıkışık / 12 MB açılmış /
 18 dosya / `index.html` kökte.
@@ -83,3 +99,65 @@ camera to either side or straight down.
 Kabul gelir gelmez linkleri CrazyGames adresine çevir: portal tıklamayı
 kendi geliriyle ödüllendiriyor, GitHub Pages ödemiyor. Videolar eski
 linkle yayınlanırsa o trafik gelir getirmez.
+
+
+---
+
+# KALAN ADIMLAR (11 Ağustos akşamı itibarıyla)
+
+## 1. QA kontrol listesi
+
+Oyun sayfasında **Go to QA** → önizleme açılır → sağ altta **Continue**.
+Açılan listede:
+
+| Madde | Cevap | Neden |
+|---|---|---|
+| Initial download size <50MB | otomatik ✅ | 12,4 MB |
+| First gameplay start | otomatik ✅ | SDK algıladı |
+| First gameplay start implemented correctly | **Yes** | oyuncu oynanabilir duruma girince çağrılıyor |
+| Complies to Gameplay requirements | **Yes** | dokümana karşı tek tek kontrol edildi (aşağıda) |
+| Runs on all CrazyGames domains | **Yes** | CSP/sitelock yok, tüm ülke alan adları destekli |
+| Browser checks | **Yes** | Chrome'da kapsamlı test; Edge aynı motor |
+| Device checks: Mobile | **Yes** | kullanıcı onayına dayanıyor |
+| No external ads | **Yes** | yalnızca CrazyGames SDK |
+| Does not offer external login options | **Yes** | giriş yok |
+| In-game mention of T&C / Privacy Policy | **N/A** | portalda kişisel veri toplanmıyor |
+
+Sonra alttaki **"I confirm that these results are correct"** kutusunu
+işaretle → **Continue**.
+
+### Gameplay requirements neye karşı kontrol edildi
+
+- İngilizce arayüz ✅ · fizik `dt` tabanlı, tazeleme hızından bağımsız ✅
+- Özel tam ekran düğmesi yok ✅ · özgün varlıklar ✅ · PEGI 12 ✅
+- Dış platform tanıtımı yok ✅ (oyunda YouTube/GitHub linki yok)
+- Yeni oyuncu doğrudan oynanabilir tahtaya açılıyor ✅
+
+## 2. Details
+
+Metinler yukarıdaki "Form metinleri" bölümünde hazır, kopyala-yapıştır.
+
+**Kapak görseli:** formun istediği ölçüyü Claude'a söyle, oyunun içinden
+render edip Masaüstüne bırakır. Tahminle üretilmedi - yanlış ölçü sık bir
+red sebebi.
+
+## 3. Submit
+
+## Kabul gelirse HEMEN
+
+`kanal/yukleme.md` ve `kanal/yeni-dortlu.md` içindeki videoların oyun
+linkini CrazyGames adresine çevir. 2-6. videolar planlı ama yayınlanmadı,
+açıklamaları hâlâ düzenlenebilir. Portal tıklamayı kendi geliriyle
+ödüllendiriyor, GitHub Pages ödemiyor.
+
+## Portalın kendi arızaları (11 Ağustos'ta yaşandı)
+
+Bunlar bizim hatamız değil, tekrar görülürse panik yapma:
+
+- Yükleme sırasında `TypeError: Failed to fetch` (uploadSingleFile) →
+  arayüz Save/Delete butonlarını **sonsuza kadar kapalı** bırakıyor ve
+  ekrana hiçbir hata yazmıyor. Çözüm: sayfayı tazele, sunucudaki son
+  sağlam hâl korunuyor, baştan yükle.
+- "Developer Portal is temporarily unavailable" tam sayfa hatası.
+- Oyun sayfası doğrudan URL ile `Failed to fetch` verirken **My Games
+  listesinden tıklayarak** açılabiliyor.
