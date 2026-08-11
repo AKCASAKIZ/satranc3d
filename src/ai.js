@@ -1,4 +1,4 @@
-import { Engine, LEVELS, pickMove, toPublicMove } from "./engine.js";
+import { Engine, LEVELS, levelWithBias, pickMove, toPublicMove } from "./engine.js";
 
 export { LEVELS };
 
@@ -35,24 +35,24 @@ export class AI {
   }
 
   /** @returns {Promise<{ move: {from,to,promotion,san}|null, score, depth, nodes }>} */
-  async think(fen, level) {
+  async think(fen, level, bias = 0) {
     if (this.worker) {
       const id = ++this.seq;
       try {
         return await new Promise((resolve, reject) => {
           this.pending.set(id, { resolve, reject });
-          this.worker.postMessage({ id, fen, level });
+          this.worker.postMessage({ id, fen, level, bias });
         });
       } catch {
         /* yedege dus */
       }
     }
-    return this.thinkSync(fen, level);
+    return this.thinkSync(fen, level, bias);
   }
 
-  async thinkSync(fen, level) {
+  async thinkSync(fen, level, bias = 0) {
     this.fallback ??= new Engine();
-    const cfg = LEVELS[level] ?? LEVELS.orta;
+    const cfg = levelWithBias(level, bias);
     const result = this.fallback.search(fen, { timeMs: cfg.timeMs, maxDepth: cfg.maxDepth });
     return {
       move: toPublicMove(pickMove(result, cfg.slack)),

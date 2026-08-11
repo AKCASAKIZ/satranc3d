@@ -4,7 +4,7 @@ import { createBoard, createHighlights, squareToWorld } from "./board.js";
 import { loadWarriors, PieceSet, attachActorClock } from "./pieces.js";
 import { Game } from "./game.js";
 import { CameraRig } from "./camera_rig.js";
-import { createUI, loadSettings } from "./ui.js";
+import { createUI, loadSettings, saveSettings } from "./ui.js";
 import { Clock } from "./clock.js";
 import { TimeScale, Shake } from "./fx/impact.js";
 import { initAudio } from "./fx/audio.js";
@@ -79,6 +79,70 @@ function refresh() {
   const s = game.status();
   statusEl.textContent = s.text;
   statusEl.classList.toggle("over", s.over);
+  if (s.over) sonPerdeAc(s);
+}
+
+/* ---------- oyun sonu ve sessiz zorluk uyarlamasi ---------- *
+ *
+ *  Oyun bitince eskiden SADECE durum yazisi degisiyordu; oyuncunun yeni oyunu
+ *  sol ustteki kucuk dugmeden kendisi baslatmasi gerekiyordu. Tutma acisindan
+ *  en kritik an tam burasi: yenilen oyuncu bir sey aramak zorunda kalirsa
+ *  sekmeyi kapatiyor. Perde matin ardindan gelir, rovans tek tik uzakta.
+ *
+ *  Ayni anda zorluk SESSIZCE kayiyor. Gosterilmemesi bilincli: "zorluk
+ *  dusuruldu" yazisi oyuncuyu asagilar.
+ */
+
+/** Motora giden yumusatma. Ilk oyunda bir tik yumusak baslar. */
+function etkinBias() {
+  return (settings.bias || 0) + (settings.ilkOyun ? 1 : 0);
+}
+
+/** Insan-insan oyununda uyarlama yok; kimin "kaybettigi" motorla ilgili degil. */
+function sonucuIsle(s) {
+  if (!aiPlays()) return null;
+  if (!s.winner) return "draw";
+  return s.winner === settings.playerColor ? "win" : "loss";
+}
+
+function uyarla(sonuc) {
+  if (!sonuc || sonuc === "draw") return;
+  const kazandi = sonuc === "win";
+  // Seri ayni yonde birikir, yon degisince sifirlanip yeniden baslar
+  settings.seri = kazandi
+    ? Math.max(1, (settings.seri || 0) + 1)
+    : Math.min(-1, (settings.seri || 0) - 1);
+  // Iki ust uste ayni sonuc -> bir tik kaydir, sonra seriyi sifirla ki
+  // ucuncu oyunda tekrar kaydirmasin (kademe kademe, sicramadan)
+  if (Math.abs(settings.seri) >= 2) {
+    settings.bias = Math.max(-2, Math.min(2, (settings.bias || 0) + (kazandi ? -1 : 1)));
+    settings.seri = 0;
+  }
+  settings.ilkOyun = false;
+  saveSettings(settings);
+}
+
+function sonPerdeAc(s) {
+  const el = document.getElementById("son");
+  if (!el || !el.hidden) return;                 // ayni oyunda iki kez acilmasin
+  const sonuc = sonucuIsle(s);
+  uyarla(sonuc);
+  document.getElementById("sonBaslik").textContent = s.text;
+  document.getElementById("sonAlt").textContent =
+    sonuc === "win" ? "Well played." : sonuc === "loss" ? "Care for another?" : "";
+  // Perde animasyonun uzerine hemen binmesin: oyuncu son darbeyi gorsun
+  setTimeout(() => { el.hidden = false; }, 900);
+}
+
+function yeniOyun() {
+  const el = document.getElementById("son");
+  if (el) el.hidden = true;
+  generation++;
+  game.reset();
+  selected = null;
+  highlights.clear();
+  refresh();
+  maybeAiMove();
 }
 
 /** Sira motordaysa dusundurup hamlesini oynatir. */
@@ -89,14 +153,14 @@ async function maybeAiMove() {
   busy = true;
   selected = null;
   highlights.clear();
-  statusEl.textContent = "Rakip dusunuyor...";
+  statusEl.textContent = "Thinking\u2026";
 
   let answer;
   try {
-    answer = await ai.think(game.fen, settings.opponent);
+    answer = await ai.think(game.fen, settings.opponent, etkinBias());
   } catch (err) {
     console.error(err);
-    statusEl.textContent = "Motor hatasi: " + err.message;
+    statusEl.textContent = "Engine error: " + err.message;
     busy = false;
     return;
   }
@@ -339,12 +403,14 @@ async function boot() {
     window.addEventListener("keydown", unlock, { once: true });
     document.getElementById("reset").addEventListener("click", () => {
       if (busy) return;
-      generation++;
-      game.reset();
-      selected = null;
-      highlights.clear();
-      refresh();
-      maybeAiMove();
+      yeniOyun();
+    });
+    document.getElementById("sonRovans").addEventListener("click", yeniOyun);
+    document.getElementById("sonTaraf").addEventListener("click", () => {
+      settings.playerColor = settings.playerColor === "w" ? "b" : "w";
+      saveSettings(settings);
+      rig.preset(aiPlays() && settings.playerColor === "b" ? "siyah" : "beyaz");
+      yeniOyun();
     });
     loop();
     maybeAiMove();

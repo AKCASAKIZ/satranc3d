@@ -11,6 +11,16 @@ const DEFAULTS = {
   playerColor: "w",
   // Yeme sahnesinin uzunlugu: tam dovus guzel ama her hamlede 4 sn suruyor
   duel: "kisa",
+  // --- sessiz zorluk uyarlamasi ---
+  // seri: +n ust uste galibiyet, -n ust uste yenilgi. bias: motora giden
+  // yumusatma (-2..+2). Oyuncuya HIC gosterilmiyor; "zorluk dusuruldu" yazisi
+  // oyuncuyu asagilar ve tam da kaybetmemek istedigimiz anda kaybettirir.
+  seri: 0,
+  bias: 0,
+  // Ilk oturumda motor "Orta" ile basliyordu: derinlik 5, sirdan bir oyuncuyu
+  // eziyor ve ilk izlenim "beni ezdi" oluyordu. Ilk oyun yumusak baslar,
+  // oyuncu kazanirsa uyarlama zaten sertlestirir.
+  ilkOyun: true,
 };
 
 export function loadSettings() {
@@ -19,6 +29,10 @@ export function loadSettings() {
   } catch {
     return { ...DEFAULTS };
   }
+}
+
+export function saveSettings(settings) {
+  save(settings);
 }
 
 function save(settings) {

@@ -75,6 +75,33 @@
     background: #2a2e33; border: 1px solid #41464c; border-radius: 8px; padding: 9px 12px;
   }
   #promo button:hover { background: #363b42; border-color: #5a616a; }
+
+  /* --- oyun sonu perdesi --- *
+     Oyun bitince tek yaptigi sey durum yazisini degistirmekti; oyuncunun
+     "New game"i sol ustte KENDISI bulmasi gerekiyordu. Tutma acisindan en
+     kritik an bu: yenilen oyuncu bir sey aramak zorunda kalirsa gidiyor.
+     Perde matin hemen ardindan gelir ve rovans tek tikla erisilir. */
+  #son[hidden] { display: none; }
+  #son {
+    position: fixed; inset: 0; display: grid; place-items: center; z-index: 12;
+    background: rgba(10,11,13,.66); backdrop-filter: blur(3px);
+    animation: sonGir .28s ease both;
+  }
+  @keyframes sonGir { from { opacity: 0 } to { opacity: 1 } }
+  #son .card {
+    background: #1d2024; border: 1px solid #3a3f45; border-radius: 14px;
+    padding: 22px 26px; text-align: center; min-width: 260px;
+  }
+  #son h2 { font-size: 19px; font-weight: 600; margin-bottom: 4px; }
+  #son .alt { font-size: 13px; color: #8b929b; margin-bottom: 16px; }
+  #son .row { display: flex; gap: 8px; justify-content: center; }
+  #son button {
+    font: inherit; font-size: 13px; color: #e8e4dc; cursor: pointer;
+    background: #2a2e33; border: 1px solid #41464c; border-radius: 8px; padding: 10px 16px;
+  }
+  #son button.primary { background: #2f6d8a; border-color: #7fd4ff; }
+  #son button:hover { background: #363b42; border-color: #5a616a; }
+  #son button.primary:hover { background: #37809f; }
 </style>
 
 <canvas id="scene"></canvas>
@@ -84,6 +111,17 @@
 </div>
 <div id="flash"></div>
 <div id="ui"></div>
+
+<div id="son" hidden>
+  <div class="card">
+    <h2 id="sonBaslik"></h2>
+    <p class="alt" id="sonAlt"></p>
+    <div class="row">
+      <button id="sonRovans" class="primary">Rematch</button>
+      <button id="sonTaraf">Switch sides</button>
+    </div>
+  </div>
+</div>
 
 <div id="promo" hidden>
   <div class="card">

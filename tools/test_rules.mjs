@@ -87,6 +87,11 @@ function check(label, actual, expected) {
   const s = g.status();
   check("mat: oyun bitti", s.over, true);
   check("mat: metin", s.text, "Black wins by checkmate");
+  // Oyun sonu uyarlamasi bu ALANI okuyor, metni degil. Metin degisirse test
+  // ustteki satirda patlar; `winner` bozulursa zorluk uyarlamasi SESSIZCE
+  // yanlis yone kayar - o yuzden ayrica olculuyor.
+  check("mat: kazanan alani", s.winner, "b");
+  check("beraberlikte kazanan yok", new Game().status().winner, undefined);
 }
 
 // --- gecersiz hamle ----------------------------------------------------

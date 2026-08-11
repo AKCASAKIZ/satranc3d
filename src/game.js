@@ -94,12 +94,20 @@ export class Game {
 
   status() {
     if (this.chess.isCheckmate()) {
-      return { over: true, text: this.turn === "w" ? "Black wins by checkmate" : "White wins by checkmate" };
+      // `winner` YAPISAL olarak veriliyor: cagri yerleri metni ayristirmasin.
+      // Once oyun sonu uyarlamasi metni regex'le okuyordu; yazi degisince
+      // (ornegin dil eklenirse) uyarlama sessizce bozuluyordu.
+      const winner = this.turn === "w" ? "b" : "w";
+      return {
+        over: true,
+        winner,
+        text: winner === "b" ? "Black wins by checkmate" : "White wins by checkmate",
+      };
     }
-    if (this.chess.isStalemate()) return { over: true, text: "Stalemate — draw" };
-    if (this.chess.isInsufficientMaterial()) return { over: true, text: "Insufficient material — draw" };
-    if (this.chess.isThreefoldRepetition()) return { over: true, text: "Threefold repetition — draw" };
-    if (this.chess.isDraw()) return { over: true, text: "Draw" };
+    if (this.chess.isStalemate()) return { over: true, winner: null, text: "Stalemate — draw" };
+    if (this.chess.isInsufficientMaterial()) return { over: true, winner: null, text: "Insufficient material — draw" };
+    if (this.chess.isThreefoldRepetition()) return { over: true, winner: null, text: "Threefold repetition — draw" };
+    if (this.chess.isDraw()) return { over: true, winner: null, text: "Draw" };
     if (this.chess.inCheck()) {
       return { over: false, text: (this.turn === "w" ? "White" : "Black") + " is in check" };
     }

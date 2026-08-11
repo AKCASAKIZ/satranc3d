@@ -1,12 +1,12 @@
-import { Engine, LEVELS, pickMove, toPublicMove } from "./engine.js";
+import { Engine, levelWithBias, pickMove, toPublicMove } from "./engine.js";
 
 // Arama ana is parcaciginda kosarsa kamera ve oldurus animasyonlari
 // donuyor; bu yuzden motor tamamen worker'da yasiyor.
 const engine = new Engine();
 
 self.onmessage = (e) => {
-  const { id, fen, level } = e.data;
-  const cfg = LEVELS[level] ?? LEVELS.orta;
+  const { id, fen, level, bias } = e.data;
+  const cfg = levelWithBias(level, bias);
 
   try {
     const result = engine.search(fen, { timeMs: cfg.timeMs, maxDepth: cfg.maxDepth });

@@ -396,6 +396,27 @@ export const LEVELS = {
 };
 
 /**
+ * Oyuncunun secimini SESSIZCE kaydiran ayar.
+ *
+ * Neden slack'i kaydiriyoruz da derinligi degil: derinligi kismak motoru
+ * ZAYIF degil TUHAF oynatiyor -- insan "bu ne sacma hamle" der ve yenilgi
+ * adil hissettirmez. slack ise "en iyi hamleden N santipiyon geride kalanlar
+ * da kur'aya girsin" demek; motor insanin YAKALAYABILECEGI hatalar yapiyor.
+ *
+ * bias: -2..+2 arasi tamsayi. Artarsa motor yumusar (slack buyur), azalirsa
+ * sertlesir. Ust sinir 260: ustunde hamleler rastgeleye donup yine tuhaflasiyor.
+ */
+export function levelWithBias(level, bias = 0) {
+  const cfg = LEVELS[level] ?? LEVELS.orta;
+  if (!bias) return cfg;
+  const adim = 55;
+  const slack = Math.max(0, Math.min(260, cfg.slack + bias * adim));
+  // Cok yumusarken derin aramanin anlami kalmiyor; sureyi de kis, mobil rahatlasin
+  const timeMs = bias > 0 ? Math.max(250, cfg.timeMs - bias * 200) : cfg.timeMs;
+  return { ...cfg, slack, timeMs };
+}
+
+/**
  * Seviyeye gore hamle secer. "slack" santipiyon: en iyi hamleden bu kadar
  * geride kalan hamleler de kur'aya girer. Boylece kolay seviye rastgele
  * sacmalamadan -- ama insanin yakalayabilecegi hatalar yaparak -- oynuyor.
