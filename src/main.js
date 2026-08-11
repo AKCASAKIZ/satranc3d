@@ -74,6 +74,24 @@ const pointer = new THREE.Vector2();
 const aiPlays = () => settings.opponent !== "insan";
 const humanTurn = () => !aiPlays() || game.turn === settings.playerColor;
 
+/* ---------- olcum ---------- *
+ *
+ *  Sayfa goruntulemesi tek basina bir sey soylemiyor: gelenlerin cogu bakip
+ *  cikiyor olabilir. Asil sayi GELEN ile OYNAYAN arasindaki fark - portal
+ *  hazirligi da, YouTube hattinin ise yarayip yaramadigi da buradan okunuyor.
+ *
+ *  Iki olay yetiyor:
+ *    ilk-hamle  -> ziyaretci gercekten oynadi (tahtaya dokundu)
+ *    oyun-bitti -> partiyi sonuna goturdu
+ *  Kisisel hicbir veri gonderilmiyor; GoatCounter zaten cerez kullanmiyor.
+ *  Olcum yoksa (reklam engelleyici, kayit modu) sessizce gecilir. */
+let ilkHamleBildirildi = false;
+function olay(ad) {
+  try {
+    window.goatcounter?.count?.({ path: ad, title: ad, event: true });
+  } catch { /* olcum oyunu asla bozmasin */ }
+}
+
 function refresh() {
   pieces.sync(game.board);
   const s = game.status();
@@ -126,6 +144,7 @@ function sonPerdeAc(s) {
   const el = document.getElementById("son");
   if (!el || !el.hidden) return;                 // ayni oyunda iki kez acilmasin
   const sonuc = sonucuIsle(s);
+  olay("oyun-bitti-" + (sonuc || "insan"));
   uyarla(sonuc);
   document.getElementById("sonBaslik").textContent = s.text;
   document.getElementById("sonAlt").textContent =
@@ -193,6 +212,10 @@ function askPromotion() {
 
 /** @param {string} [forced] motorun sectigi terfi -- verilirse soru sorulmaz */
 async function playMove(from, to, forced) {
+  if (!ilkHamleBildirildi && humanTurn()) {
+    ilkHamleBildirildi = true;
+    olay("ilk-hamle");
+  }
   busy = true;
   highlights.clear();
   selected = null;

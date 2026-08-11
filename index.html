@@ -104,6 +104,22 @@
   #son button.primary:hover { background: #37809f; }
 </style>
 
+<!-- Olcum: GoatCounter. Cerez yok, kisisel veri yok - bu yuzden cerez
+     bandi da gerekmiyor. Tek merak ettigimiz sey su: YouTube'dan gelen kac
+     kisi oyuna DOKUNUYOR? Sayfa goruntulemesi tek basina bunu soylemiyor.
+     `path` ozellestiriliyor ki kaynak (?s=yt) ayri satir olarak dussun;
+     yoksa YouTube trafigi ile dogrudan gelen ayirt edilemiyor. -->
+<script>
+  window.goatcounter = {
+    path: function (p) {
+      var s = new URLSearchParams(location.search).get("s");
+      return s ? p + "?s=" + encodeURIComponent(s.slice(0, 16)) : p;
+    },
+  };
+</script>
+<script data-goatcounter="https://whitegum.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
+
 <canvas id="scene"></canvas>
 <div id="hud">
   <span id="status">Loading…</span>
