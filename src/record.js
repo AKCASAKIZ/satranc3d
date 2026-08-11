@@ -23,7 +23,12 @@ import { renderEventsToWav } from "./fx/audio.js";
  * geri donuldugunde karsilastirma yapilamaz.
  */
 
+/* Ilk alti kanal deneyinin ilk partisi. Sonraki dortlu kanca gucune gore
+   secildi: kurbanin VEZIR olmasi gokte yildirim cakmasini tetikliyor
+   (bkz. YILDIRIMLI, finishers.js), piyonun agir tas yemesi ise en guclu
+   "cirak ustayi yendi" kancasi. */
 const ALL_SPECS = ["pxp", "rxq", "nxb", "bxn", "qxr", "kxp"];
+const YENI_SPECS = ["pxq", "kxq", "pxr", "qxb"];
 // Klip etiketleri INGILIZCE: kanal ve portal kitlesi kuresel. Turkce
 // etiket ("VEZIR x KALE") videoyu Turkiye disinda okunmaz kiliyordu.
 const NAMES = { p: "PAWN", r: "ROOK", n: "KNIGHT", b: "BISHOP", q: "QUEEN", k: "KING" };
@@ -269,7 +274,7 @@ export async function runRecord({ params, scene, settings, assets }) {
   const spec = params.get("clip") || "qxp";
   // Klipler her zaman tam dovusu gosteriyor -- pazarlama icerigi bu
   settings.duel = params.get("duel") || "tam";
-  const specs = spec === "all" ? ALL_SPECS : [spec];
+  const specs = spec === "all" ? ALL_SPECS : spec === "yeni" ? YENI_SPECS : [spec];
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1);
