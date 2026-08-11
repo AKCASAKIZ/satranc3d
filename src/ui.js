@@ -47,7 +47,7 @@ function save(settings) {
  * Ayarlar paneli + tahta dondurme aparati.
  * Panel sag ustte acilip kapaniyor, dondurme kumandasi sag altta sabit.
  */
-export function createUI({ scene, rig, settings, onOpponentChange }) {
+export function createUI({ scene, rig, settings, clock, onOpponentChange }) {
   const root = document.getElementById("ui");
 
   // --- dondurme aparati (sag alt) -------------------------------------
@@ -154,7 +154,7 @@ export function createUI({ scene, rig, settings, onOpponentChange }) {
     const s = e.target.closest(".swatch");
     if (s) {
       settings.theme = s.dataset.theme;
-      applyTheme(scene, settings.theme);
+      applyTheme(scene, settings.theme, clock);
       markActive();
       save(settings);
       return;
@@ -182,7 +182,7 @@ export function createUI({ scene, rig, settings, onOpponentChange }) {
     save(settings);
   });
 
-  applyTheme(scene, settings.theme);
+  applyTheme(scene, settings.theme, clock);
   markActive();
 
   return { panel, dock };

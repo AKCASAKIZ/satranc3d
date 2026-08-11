@@ -48,7 +48,8 @@ export const THEMES = {
     bg: 0x14100c,
     // Dag tepesi: uzak zirveler, kalin sis (bulut denizi)
     env: { sis: { renk: 0x14100c, yakin: 11, uzak: 34 }, zemin: 0x0e0b08,
-           siluet: { tur: "zirve", renk: 0x231a12, sayi: 12, mesafe: 19 } },
+           siluet: { tur: "zirve", renk: 0x231a12, sayi: 12, mesafe: 19 },
+           cim: { dip: 0x2e281c, uc: 0x554832, sayi: 16000, yaricap: 13 } },
   },
   gece: {
     label: "Gece",
@@ -73,7 +74,8 @@ export const THEMES = {
     bg: 0x101610,
     // Bambu ormani: dikey siluetler, yesilimsi sis
     env: { sis: { renk: 0x101610, yakin: 9, uzak: 30 }, zemin: 0x0b100b,
-           siluet: { tur: "bambu", renk: 0x1b2a1b, sayi: 40, mesafe: 11 } },
+           siluet: { tur: "bambu", renk: 0x1b2a1b, sayi: 40, mesafe: 11 },
+           cim: { dip: 0x28382a, uc: 0x4a6642, sayi: 22000, yaricap: 14 } },
   },
   kum: {
     label: "Kum",
@@ -88,7 +90,7 @@ export const THEMES = {
   },
 };
 
-export function applyTheme(scene, name) {
+export function applyTheme(scene, name, clock) {
   const t = THEMES[name] ?? THEMES.klasik;
   BOARD_MATERIALS.light.color.setHex(t.light);
   BOARD_MATERIALS.dark.color.setHex(t.dark);
@@ -97,6 +99,6 @@ export function applyTheme(scene, name) {
   // olarak kaliyor, yoksa silah da tas rengine karisip siluet kayboluyor.
   applyPieceColors(t.white, t.black);
   scene.background = new THREE.Color(t.bg);
-  applyEnvironment(scene, t.env);
+  applyEnvironment(scene, t.env, clock);
   return t;
 }

@@ -213,6 +213,7 @@ function matSahnesi(kazanan) {
    blogu tamamen atiyor. Konsoldan: __mat("w") */
 if (import.meta.env?.DEV) {
   window.__mat = (kazanan = "w") => matSahnesi(kazanan);
+  window.__sahne = () => scene;
   // Sekme arka plandayken requestAnimationFrame calismiyor; sahneyi
   // gozlemleyebilmek icin saati ELLE ilerletme kancasi.
   window.__adim = (dt = 1 / 60, kere = 60) => {
@@ -497,6 +498,7 @@ async function boot() {
       scene,
       rig,
       settings,
+      clock,                       // cevre animasyonlari (cim ruzgari) icin
       onOpponentChange: () => {
         // Ayar degistiginde ucusan bir motor cevabi varsa artik gecersiz
         generation++;
