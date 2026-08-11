@@ -29,17 +29,19 @@ Play free, no install: <LINK>
 #chess #kungfu #indiegame
 ```
 
-### 8 — `kxq.mp4` · Çarşamba 26 Ağustos
+### 9 — `kxq.mp4` · Pazartesi 31 Ağustos  ← SON video
 **Başlık:** `King takes queen — guandao vs butterfly knives`
 ```
 The heaviest weapon on the board against the fastest one.
+
+Which piece should I show next?
 
 Play free, no install: <LINK>
 
 #chess #kungfu #indiegame
 ```
 
-### 9 — `pxr.mp4` · Cuma 28 Ağustos
+### 8b — `pxr.mp4` · Cuma 28 Ağustos
 **Başlık:** `The pawn goes for the rook`
 ```
 A stick against a monk spade. The rook does not survive it, and it does
@@ -50,12 +52,10 @@ Play free, no install: <LINK>
 #chess #kungfu #indiegame
 ```
 
-### 10 — `qxb.mp4` · Pazartesi 31 Ağustos
+### 8a — `qxb.mp4` · Çarşamba 26 Ağustos
 **Başlık:** `Queen takes bishop — knives against a fan`
 ```
 The old master never rushes. This time it does not save him.
-
-Which piece should I show next?
 
 Play free, no install: <LINK>
 
@@ -83,3 +83,24 @@ değiştirmeye izin vermiyor; değiştirmek sil + yeniden yükle + yeniden
 planla demek, hem planlanmış slot hem URL gider. Studio arayüzü bu işte
 zaten dört sessiz hata üretmişti (bkz. `yukleme.md`). 10 saniyelik bir
 Short'ta fark izleyiciye çarpmaz; kazanç maliyeti karşılamıyor.
+
+
+## Sıra ÜRETIMDEN SONRA degisti — sebebi olculdu
+
+Dordu de uretilip kare kare bakildi. `qxb` gorunur sekilde en gosterissizi:
+kurban fil oldugu icin ne parcalanma var (PARCALANAN = vezir/sah/kale) ne
+yildirim (yalnizca vezir). Sahne vezirin oylece durmasiyla bitiyor.
+
+Ilk planda son video oydu. Deneyin KAPANISI ve "hangi tasi gostereyim?"
+yorum yemi orada duruyor; en sonik klibi oraya koymak kapanisi zayiflatir.
+Yeni sira: gosterissiz olan ortaya, en tanidik iki kelimeyi tasiyan ve
+yildirimli olan `kxq` sona.
+
+| Gun | Klip | Neden |
+|---|---|---|
+| 24 Ağu Pzt | `pxq` | en guclu kanca: cirak ustayi yendi + yildirim |
+| 26 Ağu Çar | `qxb` | sakin ara |
+| 28 Ağu Cum | `pxr` | parcalanma |
+| 31 Ağu Pzt | `kxq` | iki tanidik kelime + yildirim, soru yemi burada |
+
+Deney bitis olcumu bu durumda: **14 Eylul 2026** (son video + iki hafta).
