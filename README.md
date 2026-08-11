@@ -105,3 +105,23 @@ devriliyor, yere çarpınca patlıyor. Önce patlatmak devrilmeyi anlamsız kıl
 > Parçalar oyunun **ölçekli saatinden** besleniyor (`clock`), gerçek zamandan
 > değil: yavaş çekimde ve donmada havada asılı kalıyorlar, sahneden kopmuyorlar.
 
+## Mat sahnesi
+
+Şah satrançta **hiç yenmez** — mat, o alınmadan önce oyunu bitirir. Yani yeme
+akışındaki öldürüş sahnesi burada çalışmaz; final ayrıca sahneleniyor:
+gökten ışın iner → kaybeden şah ışığa yükselir → **kazanan tarafın bütün
+taşları zafer duruşuna geçip zıplar** → rövanş perdesi gelir.
+
+Kazananın sevinmesi süsleme değil **tutma aracı**: oyuncu kazandığında ödül,
+kaybettiğinde intikam duygusu veriyor; ikisi de rövanşa basmaya itiyor.
+
+Kutlamada zıplamalar küçük gecikmelerle dağıtılıyor — hepsi aynı anda
+zıplayınca mekanik duruyor.
+
+> !! **Arka plandaki sekmede `requestAnimationFrame` çalışmıyor.** Sahne
+> "donmuş" görünür ama kod doğrudur; Chrome görünmeyen sekmede rAF'ı
+> durduruyor. Geliştirmede `__adim(dt, kere)` kancası saati elle ilerletiyor,
+> `__mat("w")` sahneyi tetikliyor, `__tani()` şahın yüksekliğini veriyor.
+> Üçü de `import.meta.env.DEV` içinde — üretim derlemesine girmiyorlar
+> (doğrulandı: `dist` içinde 0 eşleşme).
+

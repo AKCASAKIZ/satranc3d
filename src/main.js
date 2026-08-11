@@ -1,13 +1,14 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createBoard, createHighlights, squareToWorld } from "./board.js";
-import { loadWarriors, PieceSet, attachActorClock } from "./pieces.js";
+import { loadWarriors, PieceSet, attachActorClock, CLIP } from "./pieces.js";
 import { Game } from "./game.js";
 import { CameraRig } from "./camera_rig.js";
 import { createUI, loadSettings, saveSettings } from "./ui.js";
+import { createBeam } from "./fx/sky.js";
 import { Clock } from "./clock.js";
 import { TimeScale, Shake } from "./fx/impact.js";
-import { initAudio } from "./fx/audio.js";
+import { initAudio, play as playSound } from "./fx/audio.js";
 import { runFinisher, runQuietMove } from "./finishers.js";
 import { runDemo } from "./demo.js";
 import { AI } from "./ai.js";
@@ -140,6 +141,98 @@ function uyarla(sonuc) {
   saveSettings(settings);
 }
 
+/* ---------- mat sahnesi ---------- *
+ *
+ *  Sah satrancta HIC YENMEZ - mat, o alinmadan once oyunu bitiriyor. Yani
+ *  yeme akisindaki oldurus sahnesi burada calismiyor; final ayrica
+ *  sahneleniyor: gokten isin iner, kaybeden sah isiga yukselir, KAZANAN
+ *  tarafin butun taslari zafer duruguna gecip ziplar.
+ *
+ *  Kazananin sevinmesi susleme degil tutma araci: oyuncu kazandiginda odul,
+ *  kaybettiginde intikam duygusu veriyor - ikisi de rovansa basmaya itiyor.
+ */
+const MAT_SURESI = 2.6;
+
+function matSahnesi(kazanan) {
+  if (!pieces) return 0;
+  const kaybeden = kazanan === "w" ? "b" : "w";
+  let sah = null;
+  const kutlayanlar = [];
+  for (const aktor of pieces.group.children) {
+    const u = aktor.userData;
+    if (!u) continue;
+    if (u.type === "k" && u.color === kaybeden) sah = aktor;
+    else if (u.color === kazanan) kutlayanlar.push(aktor);
+  }
+  if (!sah) return 0;
+
+  const nokta = sah.position.clone();
+  nokta.y = 0;
+  const beam = createBeam(nokta, { life: MAT_SURESI });
+  scene.add(beam.mesh);
+  playSound("beam", { power: 1 });
+
+  const baslangicY = sah.position.y;
+  clock.add((dt) => {
+    const bitti = beam.update(dt);
+    // Sah isikla birlikte yukseliyor: once agir, sonra hizlanan
+    const k = beam.progress;
+    sah.position.y = baslangicY + Math.pow(Math.max(0, k - 0.15) / 0.85, 1.7) * 7;
+    sah.visible = k < 0.96;
+    if (bitti) { scene.remove(beam.mesh); beam.dispose(); return true; }
+    return false;
+  });
+
+  // Kutlama: hepsi ayni anda ziplarsa mekanik duruyor, kucuk gecikmeler
+  // dagitiliyor. Zafer klibi zaten var; ziplama onun ustune biniyor.
+  kutlayanlar.forEach((aktor, i) => {
+    const gecikme = (i % 8) * 0.06 + Math.floor(i / 8) * 0.04;
+    const y0 = aktor.position.y;
+    let tt = -gecikme;
+    let basladi = false;
+    clock.add((dt) => {
+      tt += dt;
+      if (tt < 0) return false;
+      if (!basladi) {
+        basladi = true;
+        aktor.play?.(CLIP.VICTORY, { loop: false, speed: 1 });
+      }
+      // Iki kisa zipla: 0,45 sn'de bir
+      const z = Math.max(0, Math.sin(tt * 7)) * Math.max(0, 1 - tt / 1.6);
+      aktor.position.y = y0 + z * 0.26;
+      if (tt > 1.8) { aktor.position.y = y0; aktor.idle?.(0.3); return true; }
+      return false;
+    });
+  });
+
+  return MAT_SURESI;
+}
+
+/* Gelistirme kancasi: mat sahnesini tiklamadan tetiklemek icin.
+   `import.meta.env.DEV` sayesinde uretim derlemesine GIRMIYOR - Vite bu
+   blogu tamamen atiyor. Konsoldan: __mat("w") */
+if (import.meta.env?.DEV) {
+  window.__mat = (kazanan = "w") => matSahnesi(kazanan);
+  // Sekme arka plandayken requestAnimationFrame calismiyor; sahneyi
+  // gozlemleyebilmek icin saati ELLE ilerletme kancasi.
+  window.__adim = (dt = 1 / 60, kere = 60) => {
+    for (let i = 0; i < kere; i++) clock.tick(dt);
+    renderer.render(scene, camera);
+  };
+  window.__tani = () => {
+    const c = pieces?.group?.children ?? [];
+    const sah = c.find((a) => a.userData?.type === "k" && a.userData?.color === "b");
+    return {
+      tasSayisi: c.length,
+      ornekUserData: c[0]?.userData
+        ? { type: c[0].userData.type, color: c[0].userData.color } : null,
+      siyahSahBulundu: !!sah,
+      sahY: sah ? +sah.position.y.toFixed(3) : null,
+      sahGorunur: sah ? sah.visible : null,
+    };
+  };
+}
+
 function sonPerdeAc(s) {
   const el = document.getElementById("son");
   if (!el || !el.hidden) return;                 // ayni oyunda iki kez acilmasin
@@ -149,8 +242,9 @@ function sonPerdeAc(s) {
   document.getElementById("sonBaslik").textContent = s.text;
   document.getElementById("sonAlt").textContent =
     sonuc === "win" ? "Well played." : sonuc === "loss" ? "Care for another?" : "";
-  // Perde animasyonun uzerine hemen binmesin: oyuncu son darbeyi gorsun
-  setTimeout(() => { el.hidden = false; }, 900);
+  // Mat varsa perde sahnenin ARDINDAN gelsin; beraberlikte kisa bekleme yeter
+  const bekle = s.winner ? matSahnesi(s.winner) * 1000 + 400 : 900;
+  setTimeout(() => { el.hidden = false; }, bekle);
 }
 
 function yeniOyun() {
