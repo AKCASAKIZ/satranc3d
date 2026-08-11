@@ -1,7 +1,10 @@
 # CrazyGames gönderimi — Kung-Fu Chess 3D
 
-**Durum (11 Ağustos 2026, akşam):** oyun kaydı açıldı, yapı YÜKLENDİ ve QA'da
-test edildi. Kalan: QA kontrol listesi → Details → Submit.
+**GÖNDERİLDİ — 11 Ağustos 2026.** Durum: **AWAITING REVIEW**.
+Portal bildirimi: "Your game has been sent for review. We will notify you
+once the team has reviewed your game."
+
+Faturalandırma da tamamlandı (Tipalti üzerinden, kullanıcı kendi yaptı).
 
 - Oyun: `Kung-Fu Chess 3D` · HTML5 · **Basic Launch** · durum **Draft**
 - Yüklü yapı: `5a4bf669` (paket `index-D4sPr0UH.js`)
@@ -161,3 +164,50 @@ Bunlar bizim hatamız değil, tekrar görülürse panik yapma:
 - "Developer Portal is temporarily unavailable" tam sayfa hatası.
 - Oyun sayfası doğrudan URL ile `Failed to fetch` verirken **My Games
   listesinden tıklayarak** açılabiliyor.
+
+
+---
+
+# GÖNDERİM TAMAMLANDI (11 Ağustos 2026)
+
+| Alan | Değer |
+|---|---|
+| Oyun | Kung-Fu Chess 3D |
+| Kategori | Board |
+| Etiketler | 1 Player, 3D |
+| Akış | Basic Launch (Full seçilemiyor) |
+| Durum | AWAITING REVIEW |
+| Yapı | `5a4bf669` / `index-D4sPr0UH.js` |
+
+## Yüklenen medya
+
+Hepsi `out/portal/` altında, `tools/make_portal_media.sh` ile üretildi.
+
+| Dosya | Ölçü | Nereye |
+|---|---|---|
+| `kapak_yatay.png` | 1920×1080 | Landscape 16:9 |
+| `kapak_dikey.png` | 800×1200 | Portrait 2:3 |
+| `kapak_kare.png` | 800×800 | Square 1:1 |
+| `video_yatay.mp4` | 1920×1080, 5,1 sn | Landscape video |
+| `video_portre.mp4` | 1080×1920, 5,1 sn | Portrait video |
+
+Kullanılmayan ara ürünler: `kapak_portre.png`, `video_dikey.mp4`.
+
+## Boş bırakılanlar (bilinçli)
+
+Google Play / iOS App Store / Steam linkleri ve Marketing creatives URL
+zorunlu değil ve bizim o mağazalarda listemiz yok. Uydurmak yanlış beyan
+olurdu, ayrıca "dış platform tanıtımı yok" kuralıyla da çelişirdi.
+
+## SIRADA — kabul gelince
+
+1. **YouTube linklerini çevir.** `kanal/yukleme.md` ve `kanal/yeni-dortlu.md`
+   içindeki videolarda oyun linki GitHub Pages'i gösteriyor. 2-6. videolar
+   planlı ama YAYINLANMADI (22 Ağustos'a kadar), açıklamaları düzenlenebilir.
+   Portal tıklamayı kendi geliriyle ödüllendiriyor, GitHub Pages ödemiyor.
+
+2. **Retention işi.** Basic'ten Full'e terfi üç sayıya bakıyor:
+   ortalama oynama süresi 10+ dk, 1. gün geri dönüş %10-15, dönüşüm %80+.
+   Bu sayıların tutacağını gösteren hicbir ölçümümüz YOK. Sessiz zorluk
+   uyarlaması var ama 10 dakikalık ortalama için yeterli oldugu
+   gösterilmedi. Oyun tarafındaki bir sonraki iş bu.
