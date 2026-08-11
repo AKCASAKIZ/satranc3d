@@ -1,9 +1,15 @@
 import * as THREE from "three";
 import { BOARD_MATERIALS } from "./board.js";
 import { applyPieceColors } from "./pieces.js";
+import { applyEnvironment } from "./env.js";
 
 /**
- * Renk temalari. Her tema hem tahtayi hem taslari hem de arka plani belirler.
+ * Renk temalari. Her tema hem tahtayi hem taslari hem arka plani hem de
+ * CEVREYI (tahtanin durdugu yer) belirler.
+ *
+ * Cevre ayri bir secici DEGIL, bilerek: iki ayri secici birakilsaydi oyuncu
+ * okunmaz kombinasyonlar kurabilirdi (parlak cevre + dusuk kontrastli tahta).
+ * Tek secici, tasarim kuralini koruyor.
  * Kural: acik/koyu tas kontrasti her temada yuksek kalmali, yoksa tahta
  * okunmaz hale gelir -- projenin ana tasarim kurali bu.
  */
@@ -16,6 +22,9 @@ export const THEMES = {
     white: 0xf2ece0,
     black: 0x33302b,
     bg: 0x151719,
+    // Bosluk: varsayilan. Sadece hafif sis, silueti yok -
+    // taniyacaklari ilk gorunum sade kalsin.
+    env: { sis: { renk: 0x151719, yakin: 16, uzak: 46 }, zemin: 0x0d0f11 },
   },
   mermer: {
     label: "Mermer",
@@ -25,6 +34,9 @@ export const THEMES = {
     white: 0xfbfaf7,
     black: 0x2e343b,
     bg: 0x1b1e22,
+    // Saolin avlusu: uzakta tas sutunlar, sabah sisi
+    env: { sis: { renk: 0x1b1e22, yakin: 13, uzak: 40 }, zemin: 0x14171a,
+           siluet: { tur: "sutun", renk: 0x2a2f36, sayi: 18, mesafe: 15 } },
   },
   ceviz: {
     label: "Ceviz",
@@ -34,6 +46,9 @@ export const THEMES = {
     white: 0xf6e6cd,
     black: 0x2b1c11,
     bg: 0x14100c,
+    // Dag tepesi: uzak zirveler, kalin sis (bulut denizi)
+    env: { sis: { renk: 0x14100c, yakin: 11, uzak: 34 }, zemin: 0x0e0b08,
+           siluet: { tur: "zirve", renk: 0x231a12, sayi: 12, mesafe: 19 } },
   },
   gece: {
     label: "Gece",
@@ -43,6 +58,10 @@ export const THEMES = {
     white: 0x7fe3ff,
     black: 0xff5f8a,
     bg: 0x080b10,
+    // Gece tapinagi: fenerler, koyu mavi, derin sis
+    env: { sis: { renk: 0x080b10, yakin: 10, uzak: 32 }, zemin: 0x05070b,
+           siluet: { tur: "sutun", renk: 0x121a26, sayi: 14, mesafe: 14 },
+           fener: { sayi: 10, mesafe: 12, renk: 0xff9d5c } },
   },
   orman: {
     label: "Orman",
@@ -52,6 +71,9 @@ export const THEMES = {
     white: 0xf4f7ea,
     black: 0x22301d,
     bg: 0x101610,
+    // Bambu ormani: dikey siluetler, yesilimsi sis
+    env: { sis: { renk: 0x101610, yakin: 9, uzak: 30 }, zemin: 0x0b100b,
+           siluet: { tur: "bambu", renk: 0x1b2a1b, sayi: 40, mesafe: 11 } },
   },
   kum: {
     label: "Kum",
@@ -61,6 +83,8 @@ export const THEMES = {
     white: 0xfff6e4,
     black: 0x4a3320,
     bg: 0x1d1712,
+    // Col: bos ufuk, sicak sis, siluet yok
+    env: { sis: { renk: 0x1d1712, yakin: 15, uzak: 44 }, zemin: 0x15100b },
   },
 };
 
@@ -73,5 +97,6 @@ export function applyTheme(scene, name) {
   // olarak kaliyor, yoksa silah da tas rengine karisip siluet kayboluyor.
   applyPieceColors(t.white, t.black);
   scene.background = new THREE.Color(t.bg);
+  applyEnvironment(scene, t.env);
   return t;
 }

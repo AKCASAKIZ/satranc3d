@@ -125,3 +125,29 @@ zıplayınca mekanik duruyor.
 > Üçü de `import.meta.env.DEV` içinde — üretim derlemesine girmiyorlar
 > (doğrulandı: `dist` içinde 0 eşleşme).
 
+## Çevreler — tahtanın durduğu yer
+
+Her tema artık bir **çevre** de getiriyor (`src/env.js`): sis, zemin, uzak
+silüetler, fenerler. Boşluk · Şaolin avlusu · dağ tepesi · gece tapınağı ·
+bambu ormanı · çöl.
+
+**Çevre ayrı bir seçici DEĞİL, bilerek.** İki ayrı seçici bırakılsaydı oyuncu
+okunmaz kombinasyonlar kurabilirdi (parlak çevre + düşük kontrastlı tahta).
+Tek seçici tasarım kuralını koruyor.
+
+Kural — çevre **atmosferdir, sahne değil**: her şey koyu, düşük kontrastlı,
+uzak ve silüet. Tahta her zaman sahnenin en parlak yüzeyi kalmalı. Battle
+Chess'i öldüren şey tam olarak buydu.
+
+Sis en ucuz araç: uzağı yutuyor, derinlik veriyor, modelleme istemiyor.
+Sis rengi arka planla **aynı** olmalı, yoksa ufukta görünür bir kesik çizgi
+oluşuyor.
+
+> Silüetler tohumlu üretiliyor: aynı çevre her açılışta aynı, klip kaydı da
+> kare kare sabit kalıyor.
+
+**Neden önemli:** aynı düello farklı çevrede yeni bir klip demek — 30 eşleşme
+× 6 çevre = 180 video. Ve CrazyGames'te ödüllü reklamın karşılığı olacak şey
+bu: satranç partisi uzun olduğu için reklam gösterimi az; çevre açmak
+("reklamı izle, bambu ormanını aç") oyuncuyu rahatsız etmeden gelir üretiyor.
+

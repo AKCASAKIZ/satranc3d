@@ -225,7 +225,11 @@ async function recordOne({ spec, scene, assets, settings, renderer, canvas2d, op
       h,
       flash,
       label: label ? `${NAMES[attackerType]} × ${NAMES[victimType]}` : null,
-      sub: label ? "Kung-Fu Chess 3D" : null,
+      // Olculdu (11-08-2026): kanal profilindeki link, video aciklamasindaki
+    // linkten daha cok tikliyor - Shorts'ta aciklamayi acmak iki dokunus,
+    // avatara basmak bir. Bu yuzden alt satir markayi VE yolu birlikte
+    // soyluyor. Ekrandaki yazi YouTube'un link kisitlarina takilmiyor.
+    sub: label ? "Kung-Fu Chess 3D  ·  link in profile" : null,
     });
 
     await post(
