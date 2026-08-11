@@ -122,3 +122,18 @@ export async function reklamIste(tur, { sustur, ac } = {}) {
     }
   });
 }
+
+/**
+ * Portalin ses ayarini izler. `uygula(kisikMi)` hem baslangicta hem her
+ * degisimde cagriliyor.
+ *
+ * Baslangic degeri SART: oyuncu portalda sesi kapatip oyunu actiysa
+ * dinleyici hic tetiklenmiyor ve oyun sesli basliyor.
+ */
+export function sesAyariniIzle(uygula) {
+  if (!sdk) return;
+  dene(() => {
+    uygula(!!sdk.game.settings?.muteAudio);
+    sdk.game.addSettingsChangeListener((yeni) => uygula(!!yeni?.muteAudio));
+  });
+}

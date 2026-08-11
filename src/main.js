@@ -8,13 +8,13 @@ import { createUI, loadSettings, saveSettings } from "./ui.js";
 import { createBeam } from "./fx/sky.js";
 import { Clock } from "./clock.js";
 import { TimeScale, Shake } from "./fx/impact.js";
-import { initAudio, play as playSound, sustur, sesiAc } from "./fx/audio.js";
+import { initAudio, play as playSound, sustur, sesiAc, portalSus, sesSeviyesi } from "./fx/audio.js";
 import { runFinisher, runQuietMove } from "./finishers.js";
 import { runDemo } from "./demo.js";
 import { AI } from "./ai.js";
 import {
   portalBaslat, portalVarMi, yuklemeBasladi, yuklemeBitti,
-  oyunBasladi, oyunDurdu, keyifAni, reklamIste,
+  oyunBasladi, oyunDurdu, keyifAni, reklamIste, sesAyariniIzle,
 } from "./portal.js";
 
 const canvas = document.getElementById("scene");
@@ -218,6 +218,10 @@ function matSahnesi(kazanan) {
 if (import.meta.env?.DEV) {
   window.__mat = (kazanan = "w") => matSahnesi(kazanan);
   window.__sahne = () => scene;
+  window.__ses = (portal, reklam) => {
+    portalSus(portal); reklam ? sustur() : sesiAc();
+    return { portal, reklam, kazanc: sesSeviyesi() };
+  };
   window.__bak = (x = 0, z = 2.5, renk = "w") =>
     kalabalikBaksin(new THREE.Vector3(x, 0.5, z), { renk, yaricap: 5, sure: 4 });
   // Sekme arka plandayken requestAnimationFrame calismiyor; sahneyi
@@ -542,6 +546,7 @@ async function boot() {
     // Portal once baslatilmali: yukleme sayaci ona da bildirilecek.
     // Portal yoksa hepsi sessizce hicbir sey yapmiyor.
     await portalBaslat();
+    sesAyariniIzle(portalSus);
     yuklemeBasladi();
     // 12 karakter GLB'si ~7 MB; sessiz beklemek yerine sayaci HUD'a yaz
     // Yol VERILMIYOR: pieces.js varsayilani `<BASE_URL>glb` uretiyor. Burada

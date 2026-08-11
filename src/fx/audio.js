@@ -410,26 +410,49 @@ export function initAudio() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return null;
   liveBus = createBus(new AC());
+  sesiTazele();   // portal sus ayari ses acilmadan ONCE gelmis olabilir
   return liveBus.ctx;
 }
 
-export function setVolume(v) {
-  if (liveBus) liveBus.master.gain.value = v;
+/**
+ * Ses seviyesi ONCELIK SIRALI.
+ *
+ * Uc kaynak ses kisabiliyor ve birbirini ezmemeli:
+ *   1. portalKisik  -- CrazyGames'in kendi sus tusu. HER SEYIN USTUNDE:
+ *      dokumanin ifadesi "This setting should take priority over your
+ *      in-game audio settings".
+ *   2. reklamKisik  -- reklam oynarken. Portal sarti.
+ *   3. temelSes     -- oyunun kendi seviyesi.
+ *
+ * !! Duz bir "sustur/eski degere don" cifti BURADA YANLIS OLURDU: reklam
+ *    biterken ses geri acilirken portalin susturmasi eziliyordu. Onun yerine
+ *    her kaynak kendi bayragini tutuyor, seviye tek yerden turetiliyor.
+ */
+let temelSes = 0.5;          // createBus varsayilani ile ayni
+let portalKisik = false;
+let reklamKisik = false;
+
+function sesiTazele() {
+  if (!liveBus) return;
+  liveBus.master.gain.value = portalKisik || reklamKisik ? 0 : temelSes;
 }
 
-/* Reklam boyunca susturma. Sabit bir degere donmek yerine ONCEKI seviye
-   hatirlaniyor: ileride bir ses ayari eklenirse reklam sonrasi onu ezmesin. */
-let susturmaOnceki = null;
-export function sustur() {
-  if (!liveBus || susturmaOnceki !== null) return;
-  susturmaOnceki = liveBus.master.gain.value;
-  liveBus.master.gain.value = 0;
+export function setVolume(v) {
+  temelSes = v;
+  sesiTazele();
 }
-export function sesiAc() {
-  if (!liveBus || susturmaOnceki === null) return;
-  liveBus.master.gain.value = susturmaOnceki;
-  susturmaOnceki = null;
+
+/** Portalin sus ayari. Oyunun kendi ayarini ezer. */
+export function portalSus(kisik) {
+  portalKisik = !!kisik;
+  sesiTazele();
 }
+
+/** Suanki gercek kazanc -- dogrulama icin. */
+export function sesSeviyesi() { return liveBus ? liveBus.master.gain.value : null; }
+
+export function sustur() { reklamKisik = true; sesiTazele(); }
+export function sesiAc() { reklamKisik = false; sesiTazele(); }
 
 /** Canli ses: type + gecikme (saniye). Ses acilmadiysa sessizce yutulur. */
 export function play(type, opts = {}, delay = 0) {
