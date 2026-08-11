@@ -91,11 +91,23 @@ export function oyunDurdu() {
 /** Keyif ani: kazanma, vezir alma gibi. Portal one cikarma icin kullaniyor. */
 export function keyifAni() { dene(() => sdk.game.happytime()); }
 
-/**
- * Reklam gosterir. Cozulen deger reklamin BITIP bitmedigi.
+/* Odulun YINE DE verilecegi hata kodlari.
  *
- * !! Odul YALNIZCA `adFinished`'da verilmeli, `adError`'da asla -- dokumanin
- *    acik kurali. Burada `false` donmek "odul yok" demek.
+ * Kural "odul yalnizca adFinished'da" ama bu kural oyuncunun reklami
+ * ATLAMASINA karsi. Asagidaki iki durumda gosterilecek reklam HIC YOK:
+ *   adsDisabledBasicLaunch -- Basic launch'ta reklam kapali (portalin QA
+ *     panelinin kendi ifadesi: "Ads are not allowed in basic launch")
+ *   unfilled               -- portalda o an reklam envanteri yok
+ * Bunlarda oduIu vermemek ozelligi OLU birakiyor: oyuncu Ipucu'na basiyor
+ * ve hicbir sey olmuyor. Basic launch 7-21 gun suruyor ve terfi tam da o
+ * penceredeki KPI'lara bakiyor; olu bir dugme oradan gecmemizi zorlastirir.
+ * `adblock` bilerek DISARIDA: orada reklam var, oyuncu engelliyor. */
+const ODUL_YINE_DE = new Set(["adsDisabledBasicLaunch", "unfilled"]);
+
+/**
+ * Reklam gosterir. Cozulen deger odulun verilip verilmeyecegi.
+ *
+ * `odullu` true ise yukaridaki iki hata kodunda da true donuyor.
  *
  * Ses/oyun duraklatmasi cagiranin isi degil, burada yapiliyor: her cagri
  * yerinde unutulabilecek bir sey ve unutulursa reklam sirasinda oyun sesi
@@ -114,7 +126,10 @@ export async function reklamIste(tur, { sustur, ac } = {}) {
       sdk.ad.requestAd(tur, {
         adStarted: () => { sustur?.(); },
         adFinished: () => { sonReklam = Date.now(); kapat(true); },
-        adError: (e) => { console.warn("[portal] reklam", e); kapat(false); },
+        adError: (e) => {
+          console.warn("[portal] reklam", e);
+          kapat(tur === "rewarded" && ODUL_YINE_DE.has(e?.code));
+        },
       });
     } catch (e) {
       console.warn("[portal] reklam istegi", e);
