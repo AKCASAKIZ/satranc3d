@@ -78,11 +78,11 @@ Aradaki değişiklikler (hepsi 11 Ağustos):
 İlk altı klip bu değişikliklerden **önce** üretildi. 1. video yayında,
 2–6 planlı ama yayınlanmadı.
 
-**Öneri: 2–6 yeniden üretilmesin.** YouTube video dosyasını sonradan
-değiştirmeye izin vermiyor; değiştirmek sil + yeniden yükle + yeniden
-planla demek, hem planlanmış slot hem URL gider. Studio arayüzü bu işte
-zaten dört sessiz hata üretmişti (bkz. `yukleme.md`). 10 saniyelik bir
-Short'ta fark izleyiciye çarpmaz; kazanç maliyeti karşılamıyor.
+~~Öneri: 2–6 yeniden üretilmesin.~~ **Karar 12 Ağustos'ta değişti — bkz.
+`yukleme.md` sonundaki "Görünüm tazeleme" bölümü.** Gerekçe: 2–6 hâlâ
+planlı, yani hiç izlenme almadılar; kaybedilecek URL değeri yok, maliyet
+yalnızca yeniden yükleme emeği. Tek gerçek risk Studio'nun sessiz
+hataları, onlar da `yukleme.md`'de listeli.
 
 
 ## Sıra ÜRETIMDEN SONRA degisti — sebebi olculdu

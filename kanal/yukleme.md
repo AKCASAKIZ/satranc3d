@@ -156,6 +156,42 @@ Hiçbiri hata vermiyor; ekran kontrol edilmezse video yayınlanmadan taslakta ka
 4. **Alan koordinatları pencere boyutuna göre kayıyor.** Yazmadan önce ekran
    görüntüsü al; başlık/açıklama sessizce boş kalabiliyor.
 
+---
+
+## Görünüm tazeleme — 10 klip YENİDEN ÜRETİLDİ (12 Ağustos 2026)
+
+Yüklenen ilk altı klip 11 Ağustos'un **erken** hâliyle üretilmişti. O gün
+öğleden sonra oyun üç yerde değişti (kaide diskleri kalktı, yürüme yer
+hızına bağlandı, düşenin arkadaşları dönüp bakıyor) ve 12 Ağustos'ta
+**Sparta tekmesi** geldi. Klipler artık şunu gösteriyor:
+
+- Son darbe silahla değil **tekmeyle** (kung-fu setinin o güne dek
+  kullanılmayan `Attack_Kick` klibi).
+- Kurban yerinde çökmüyor: **tahtadan savruluyor**, havada takla atıyor,
+  yere çakılıyor. Parçalanma ve yıldırım artık taşın eski karesinde değil
+  gövdenin **düştüğü** yerde.
+- Vuruşta **hız rampası**: yavaş → dur → fırlama → ağır çekim → normal.
+  Uçuş ekranda ~1,5 saniye sürüyor.
+- Kamera uçuş boyunca saldıranın arkasına kayıyor; gövde ekranda **yukarı**
+  gidiyor, yani 9:16'nın uzun kenarı kullanılıyor.
+- **Müzik var** (yoktu): prosedürel kung-fu skoru — hızlanan davul, tekmede
+  gong, kapanışta inen beş nota. Hazır parça değil, telif riski yok.
+
+Klipler `out/yeni_sparta/` altında, onu da 5,7 sn, hepsi 1080x1920.
+Ölçüldü: tepe seviye −1,3…−1,9 dB, kırpma yok.
+
+### Karar değişikliği: 2–6 DEĞİŞTİRİLECEK
+
+`yeni-dortlu.md` "2–6 yeniden üretilmesin" diyordu; gerekçesi YouTube'un
+dosya değiştirmeye izin vermemesi ve planlı slot + URL'nin kaybolmasıydı.
+O gerekçe bugün geçerli değil: **2–6 hâlâ planlı, hiç izlenme almadılar.**
+Kaybedilecek URL değeri yok, maliyet yalnızca yeniden yükleme emeği.
+Tekme + müzik farkı ise 10 saniyelik bir Short'ta izleyiciye çarpan cinsten.
+
+Yapılacak: planlı 2–6 silinecek, yeni dosyalar yüklenecek, **aynı gün ve
+saate** (13/15/18/20/22 Ağustos 18:00) planlanacak. Studio'nun dört sessiz
+hatası hâlâ geçerli, yukarıdaki listeye uyulacak.
+
 ### Kalan iş: doğrulama sonrası
 
 `youtube.com/verify` yapıldı ama Studio hâlâ *"Harici bağlantıların
