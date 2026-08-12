@@ -1,10 +1,21 @@
 import * as THREE from "three";
 import { squareToWorld } from "./board.js";
-import { flash } from "./fx/impact.js";
+import { flash, rampaEkSure } from "./fx/impact.js";
 import { createShatter } from "./fx/shatter.js";
 import { createLightning } from "./fx/sky.js";
 import { play } from "./fx/audio.js";
-import { CLIP, ATTACK_IMPACT, ATTACK_LENGTH, BLOCK_IMPACT, CLIP_LENGTH, kalabalikBaksin } from "./pieces.js";
+import { skorGiris, skorVurus, skorCarpma } from "./fx/score.js";
+import {
+  CLIP,
+  CLIP_EK,
+  ATTACK_IMPACT,
+  ATTACK_LENGTH,
+  BLOCK_IMPACT,
+  CLIP_LENGTH,
+  EK_LENGTH,
+  KICK_IMPACT,
+  kalabalikBaksin,
+} from "./pieces.js";
 
 /**
  * Efekt kanali. Canli oyunda ekrana/hoparlore gider; klip kaydinda ayni
@@ -34,7 +45,7 @@ const easeOutCubic = (k) => 1 - Math.pow(1 - k, 3);
 
 /** Klip oynatma hizlari. Ham klipler sinematik tempoda; oyun icin sikilastirildi. */
 /* walk burada YOK: yurume hizi artik yer hizindan turetiliyor (yuruHizi). */
-const SPEED = { attack: 1.3, block: 1.3, hit: 1.3, death: 1.35, victory: 1.35 };
+const SPEED = { attack: 1.3, block: 1.3, hit: 1.3, death: 1.35, victory: 1.35, kick: 1.12 };
 
 /* Tahtada yurume hizi (kare/sn).
    2.6 idi; kaide disklerini kaldirinca ayaklar ortaya cikti ve taslar
@@ -75,8 +86,65 @@ const TURN_RATE = 9.0; // radyan/sn -- kurbanin saldirgana donusu
  */
 const POWER = { p: 0.75, r: 1.25, n: 1.15, b: 1.0, q: 1.3, k: 1.45 };
 
+/* ---------------------------------------------------------------------------
+ * SPARTA TEKMESI
+ *
+ * Son darbe kesici bir alet degil TEKME (kung-fu setinin kullanilmayan
+ * `Attack_Kick` klibi) ve kurban yerinde cokmuyor: tahtanin uzerinden
+ * geriye savruluyor, takla atiyor, yere caliyor. "300" filmindeki kuyu
+ * tekmesinin isleyisi bu -- vurusun kendisinden cok, vurustan SONRAKI
+ * yolculuk agirlik veriyor.
+ *
+ * Sayilar kare (satranc karesi) / saniye cinsinden ve OYUN saatinde;
+ * yavas cekim rampasi ayri katman (bkz. SPARTA_RAMPA).
+ * ------------------------------------------------------------------------- */
+const SPARTA = {
+  hiz: 2.4, // yatay firlama hizi (kare/sn)
+  yukselme: 3.3, // dikey firlama hizi
+  yercekimi: 11.5,
+  takla: 6.6, // rad/sn -- govde ucarken kendi ekseninde donuyor
+  surtunme: 5.5, // yere carptiktan sonra kaymanin sonumu
+  merkezY: 0.62, // ayakta duran govdenin merkez yuksekligi
+  yatmaY: 0.18, // yatan govdenin merkez yuksekligi
+  sekme: 0.22, // yere carpinca kalan dikey hizin orani
+};
+const SPARTA_HOLD = 0.5; // govde yerde yatarken bekleme (fade oncesi)
+
+/** Firlama hizlari guce gore olcekleniyor: sah tekmesi piyonunkinden agir. */
+const spartaHiz = (guc) => 0.85 + 0.2 * guc;
+
+/** Kurbanin havada kalma suresi (oyun saniyesi). Plan bunu onceden bilmeli. */
+function ucusSuresi(guc) {
+  const vy = SPARTA.yukselme * spartaHiz(guc);
+  const dus = SPARTA.merkezY - SPARTA.yatmaY;
+  return (vy + Math.sqrt(vy * vy + 2 * SPARTA.yercekimi * dus)) / SPARTA.yercekimi;
+}
+
+/**
+ * Tekmenin hiz rampasi (GERCEK milisaniye, oyun saniyesi degil).
+ * Yavas -> DUR -> firlama patlamasi -> havada agir cekim -> normal.
+ */
+const SPARTA_RAMPA = [
+  { to: 0.05, ms: 110 }, // deg-di: hit-stop
+  { to: 1.45, ms: 110, ramp: true }, // govde bir anda firliyor -- KISA olmali
+  { to: 0.28, ms: 170, ramp: true }, // hemen agir cekime dus
+  { to: 0.28, ms: 760 }, // ucusun govdesi burada: imza an
+  { to: 1.0, ms: 420, ramp: true },
+];
+/* Ilk denemede hizli bolum 220 ms + yavaslama 900 ms RAMPA idi; olculdu
+   (meta.json'daki ses zamanlari): govde yere 0,70 sn'de iniyordu, yani
+   ucusun TAMAMI hizli bolumde bitiyor, yavas cekim carpmadan SONRA
+   geliyordu. Hizlanma kisa bir tekme olmali, yavaslama ise DUZ tutulmali
+   (rampa degil), yoksa ucus ortasinda hiz surekli degisiyor. */
+/** Yere carpmadaki kisa ikinci donma. */
+const SPARTA_CARPMA_RAMPA = [
+  { to: 0.08, ms: 90 },
+  { to: 1.0, ms: 260, ramp: true },
+];
+
 /** Dovus uzunlugu ayari. UI'da "Oldurus" basligi altinda. */
 export const DUEL_MODES = {
+  sparta: "Sparta tekmesi",
   tam: "Tam dovus",
   kisa: "Tek darbe",
   kapali: "Kapali",
@@ -116,6 +184,47 @@ export function planFinisher(type, mode = "kisa", dist = 1) {
 
   const attackLen = ATTACK_LENGTH[type] / SPEED.attack;
   const attackHit = ATTACK_IMPACT[type] / SPEED.attack;
+
+  if (mode === "sparta") {
+    // Once bloklanan bir savurma (dovus oldugu anlasilsin), sonra tekme.
+    const firstSwing = walkEnd;
+    const blocked = firstSwing + attackHit;
+    const kickStart = firstSwing + attackLen * 0.72;
+    const lethal = kickStart + KICK_IMPACT / SPEED.kick;
+    const ucus = ucusSuresi(power);
+    const carpma = lethal + ucus;
+    // Govde yerde surunurken saldiran kareye yuruyor: iki hareket ust uste
+    // binmezse arada olu an oluyor.
+    const advanceStart = carpma;
+    const advanceEnd = advanceStart + ADVANCE;
+    const victoryStart = advanceEnd;
+    const victoryEnd = victoryStart + (CLIP_LENGTH[CLIP.VICTORY] / SPEED.victory) * 0.5;
+    const fadeStart = carpma + SPARTA_HOLD;
+
+    return {
+      mode,
+      power,
+      attackHit,
+      walkEnd,
+      yaklasmaKareSn: approach / walkEnd,
+      ilerlemeKareSn: STANDOFF / ADVANCE,
+      firstSwing,
+      blockStart: blocked - BLOCK_IMPACT / SPEED.block,
+      blocked,
+      kickStart,
+      lethalSwing: kickStart,
+      lethal,
+      ucus,
+      carpma,
+      deathStart: lethal,
+      fadeStart,
+      advanceStart,
+      advanceEnd,
+      victoryStart,
+      victoryEnd,
+      total: Math.max(fadeStart + FADE, victoryEnd),
+    };
+  }
 
   // Tam dovuste ilk vurus bloklaniyor, oldurucu olan ikincisi. Ikinci
   // savurma birincinin toparlanmasiyla ortusuyor, yoksa arada olu an oluyor.
@@ -163,7 +272,18 @@ export function planFinisher(type, mode = "kisa", dist = 1) {
  */
 export function finisherTiming(type, mode = "kisa", dist = 1) {
   const p = planFinisher(type, mode, dist);
-  return { duration: p.total, impactAt: p.lethal / p.total, power: p.power, arc: 0 };
+  // Yavas cekim sahne saatini degil GERCEK sureyi uzatiyor; klip kaydi
+  // videoyu buna gore uzatmazsa dovus bitmeden kesiliyor.
+  const rampa = mode === "sparta" ? rampaEkSure(SPARTA_RAMPA) + rampaEkSure(SPARTA_CARPMA_RAMPA) : 0;
+  return {
+    duration: p.total,
+    impactAt: p.lethal / p.total,
+    power: p.power,
+    arc: 0,
+    rampa,
+    ucus: p.ucus ?? 0,
+    carpma: p.carpma ?? null,
+  };
 }
 
 /** Bir kere gecilen zaman noktasi -- cizelgeyi okunur tutuyor. */
@@ -256,6 +376,75 @@ export function runFinisher({
             },
           });
           cues.push({ t: plan.walkEnd, run: () => attacker.idle(0.22) });
+        } else if (plan.mode === "sparta") {
+          cues.push({
+            t: 0,
+            run: () => {
+              attacker.rotation.y = attackerYaw;
+              attacker.play(CLIP.WALK, { loop: true, speed: yuruHizi(plan.yaklasmaKareSn) });
+              fx.sound("step", { power: 0.6 * p });
+              // Muzik gercek saniyede yasar; tekmeye kadar olan kismi
+              // simdiden programlaniyor (bkz. score.js).
+              skorGiris(fx, plan.lethal, p);
+            },
+          });
+          cues.push({ t: plan.walkEnd * 0.55, run: () => fx.sound("step", { power: 0.6 * p }) });
+
+          // 1) Bloklanan savurma: tekmenin oncesinde bir alisveris olmali,
+          //    yoksa tekme "dovus" degil "sürpriz" gibi okunuyor.
+          cues.push({
+            t: plan.firstSwing,
+            run: () => {
+              attacker.play(CLIP.ATTACK, { loop: false, speed: SPEED.attack });
+              swing();
+            },
+          });
+          cues.push({
+            t: plan.blockStart,
+            run: () => victim?.play(CLIP.BLOCK, { loop: false, speed: SPEED.block }),
+          });
+          cues.push({ t: plan.blocked, run: () => strike(false) });
+
+          // 2) Tekme. Eski savasci setinde Attack_Kick yok; play() 0 donerse
+          //    normal savurmaya duselim (iki kare kayar, sahne durmaz).
+          cues.push({
+            t: plan.kickStart,
+            run: () => {
+              const sure = attacker.play(CLIP_EK.KICK, { loop: false, speed: SPEED.kick, fade: 0.1 });
+              if (!sure) attacker.play(CLIP.ATTACK, { loop: false, speed: SPEED.attack, fade: 0.1 });
+              fx.sound("whoosh", { power: p * 1.15 }, Math.max(0, KICK_IMPACT / SPEED.kick - 0.16));
+            },
+          });
+
+          // 3) Temas: her sey durur, sonra govde firlar.
+          cues.push({
+            t: plan.lethal,
+            run: () => {
+              fx.flash({ strength: 0.26 + 0.16 * p, ms: 260 });
+              rig.shake?.fire(0.22 * p, 0.5);
+              timeScale.sequence(SPARTA_RAMPA);
+              fx.sound("impact", { pitch: 54 + 30 / p, power: p * 1.2 });
+              fx.sound("kirilma", { power: p });
+              // Ucusun GERCEK suresi = sahne suresi + rampanin uzattigi kadar
+              skorVurus(fx, p, plan.ucus + rampaEkSure(SPARTA_RAMPA));
+              victim?.play(CLIP.HIT, { loop: false, speed: SPEED.hit * 0.7, fade: 0.05 });
+              if (victim) savur(victim, victimPos.clone().sub(standoff).setY(0).normalize(), p);
+            },
+          });
+
+          cues.push({
+            t: plan.advanceStart,
+            run: () => attacker.play(CLIP.WALK, { loop: true, speed: yuruHizi(plan.ilerlemeKareSn) }),
+          });
+          cues.push({
+            t: plan.advanceEnd,
+            run: () => {
+              fx.sound("place");
+              attacker.play(CLIP.VICTORY, { loop: false, speed: SPEED.victory });
+              fx.sound("victory", { power: p }, 0.18);
+            },
+          });
+          cues.push({ t: plan.victoryEnd, run: () => attacker.idle(0.35) });
         } else {
           cues.push({
             t: 0,
@@ -389,9 +578,107 @@ export function runFinisher({
           kurban.visible = false;
         };
 
+        /* --- SPARTA: kurbani tahtadan savur ---
+         *
+         *  Govde kendi MERKEZI etrafinda donmeli, ayaklarinin dibi etrafinda
+         *  degil: aktorun origini yerde oldugu icin dogrudan rotation.x
+         *  verilirse figur saatin akrebi gibi savrulup zemine giriyor.
+         *  Cozum reparent DEGIL (aktor oyunun tas listesinde duruyor, ebeveyni
+         *  degistirmek PieceSet'i bozar): merkezi ayri takip edip her karede
+         *  origini `merkez - R*c` ile geri hesapliyoruz.
+         */
+        const savur = (kurban, yon, guc) => {
+          const merkez = kurban.position.clone().setY(SPARTA.merkezY);
+          const c = new THREE.Vector3(0, SPARTA.merkezY, 0);
+          const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), kurban.rotation.y);
+          // Takla ekseni ucus yonune dik: govde geriye dogru yuvarlaniyor.
+          const eksen = new THREE.Vector3(yon.z, 0, -yon.x).normalize();
+          const olcek = spartaHiz(guc);
+          const v = yon.clone().multiplyScalar(SPARTA.hiz * olcek);
+          let vy = SPARTA.yukselme * olcek;
+          let aci = 0;
+          const omega = SPARTA.takla * (0.9 + 0.25 * guc);
+          let yerde = false;
+          let yatis = 0;
+          let omur = 0;
+          const q = new THREE.Quaternion();
+          const off = new THREE.Vector3();
+
+          /** Govdenin o andaki egimine gore merkezin durabilecegi en alcak nokta. */
+          const zeminY = (a) => SPARTA.yatmaY + (SPARTA.merkezY - SPARTA.yatmaY) * Math.abs(Math.cos(a));
+
+          const carpti = () => {
+            fx.flash({ strength: 0.12 + 0.08 * guc, ms: 180 });
+            rig.shake?.fire(0.18 * guc, 0.42);
+            timeScale.sequence(SPARTA_CARPMA_RAMPA);
+            fx.sound("death", { power: guc * 1.15 });
+            fx.sound("dust", { power: guc }, 0.03);
+            skorCarpma(fx, guc);
+            kalabalikBaksin(merkez.clone().setY(0), {
+              renk: kurban.userData?.color,
+              haric: [kurban, attacker],
+            });
+            if (YILDIRIMLI.has(kurban.userData?.type)) yildirimDusur(kurban, merkez.clone().setY(0));
+            if (PARCALANAN.has(kurban.userData?.type)) {
+              // Parcalanma carpmadan hemen SONRA: once govdenin yere indigi
+              // gorulsun. Yildirimla ayni karede patlarsa simsek okunmuyor.
+              let bekle = 0.3;
+              clock.add((d) => {
+                bekle -= d;
+                if (bekle > 0) return false;
+                parcala(kurban, guc);
+                return true;
+              });
+            }
+          };
+
+          const uygula = () => {
+            q.setFromAxisAngle(eksen, aci).multiply(yaw);
+            off.copy(c).applyQuaternion(q);
+            kurban.quaternion.copy(q);
+            kurban.position.copy(merkez).sub(off);
+          };
+
+          uygula();
+          clock.add((d) => {
+            omur += d;
+            if (!yerde) {
+              merkez.addScaledVector(v, d);
+              vy -= SPARTA.yercekimi * d;
+              merkez.y += vy * d;
+              aci += omega * d;
+              if (vy < 0 && merkez.y <= zeminY(aci)) {
+                merkez.y = zeminY(aci);
+                yerde = true;
+                vy = vy * -SPARTA.sekme;
+                if (vy < 0.4) vy = 0; // tek agir carpma, zipzip yok
+                // En yakin YATIK duruma otur (pi/2'nin tek katlari).
+                yatis = Math.round((aci - Math.PI / 2) / Math.PI) * Math.PI + Math.PI / 2;
+                carpti();
+              }
+            } else {
+              v.multiplyScalar(Math.max(0, 1 - SPARTA.surtunme * d));
+              merkez.addScaledVector(v, d);
+              if (vy !== 0) {
+                vy -= SPARTA.yercekimi * d;
+                merkez.y += vy * d;
+              }
+              aci += (yatis - aci) * Math.min(1, 9 * d);
+              if (merkez.y < zeminY(aci)) {
+                merkez.y = zeminY(aci);
+                vy = 0;
+              }
+            }
+            uygula();
+            return omur > plan.total; // sahne bitince kendini birak
+          });
+        };
+
         /** Gokten yildirim: kurbanin ayagina vurur, gok gurler, ekran carpar. */
-        const yildirimDusur = (kurban) => {
-          const nokta = kurban.position.clone();
+        const yildirimDusur = (kurban, hedef = null) => {
+          // Sparta'da govde artik kendi karesinde degil; simsek DUSTUGU yere
+          // vurmali, taşın eski karesine degil.
+          const nokta = (hedef ?? kurban.position).clone();
           nokta.y = 0;
           const bolt = createLightning(nokta, { seed: 7 });
           scene.add(bolt.mesh);

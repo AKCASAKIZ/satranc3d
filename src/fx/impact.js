@@ -18,22 +18,94 @@ export class TimeScale {
     this.now = now;
     this.value = 1;
     this.until = 0;
+    /** Sirali hiz programi (bkz. sequence). Bos ise klasik freeze/slow yolu. */
+    this.steps = null;
   }
 
   freeze(ms = 70) {
+    this.steps = null;
     this.value = 0.02;
     this.until = this.now() + ms;
   }
 
   slow(factor = 0.35, ms = 250) {
+    this.steps = null;
     this.value = factor;
     this.until = this.now() + ms;
   }
 
+  /**
+   * Hiz RAMPASI: tek bir donma yerine sirali bir hiz programi.
+   *
+   * "300" tarzi darbe tek bir yavaslatma degil, yavas-DUR-hizli-yavas
+   * dizisi: tekme agir agir gelir, degdigi an durur, govde bir anda
+   * firlar, sonra havada tekrar agirlasir. Tek `freeze` bunu veremiyor
+   * cunku donmeden sonra her sey ayni hizda devam ediyor.
+   *
+   * @param {Array<{to:number, ms:number, ramp?:boolean}>} steps
+   *   ramp yoksa deger aninda `to` olur ve ms boyunca orada kalir;
+   *   ramp true ise onceki degerden `to`'ya ms boyunca yumusakca gecer.
+   *   Program bitince deger 1'e doner.
+   */
+  sequence(steps) {
+    const t0 = this.now();
+    let at = t0;
+    let from = this.value;
+    this.steps = steps.map((s) => {
+      const seg = { start: at, end: at + s.ms, from, to: s.to, ramp: !!s.ramp };
+      at = seg.end;
+      from = s.to;
+      return seg;
+    });
+    this.until = at;
+  }
+
   update() {
-    if (this.value !== 1 && this.now() >= this.until) this.value = 1;
+    const t = this.now();
+
+    if (this.steps) {
+      if (t >= this.until) {
+        this.steps = null;
+        this.value = 1;
+        return this.value;
+      }
+      for (const seg of this.steps) {
+        if (t >= seg.end) continue;
+        if (t < seg.start) break; // program ileride basliyorsa mevcut deger korunur
+        if (!seg.ramp) {
+          this.value = seg.to;
+        } else {
+          const k = (t - seg.start) / Math.max(1, seg.end - seg.start);
+          // smoothstep: duz lineer rampa makine gibi okunuyor
+          this.value = seg.from + (seg.to - seg.from) * (k * k * (3 - 2 * k));
+        }
+        break;
+      }
+      return this.value;
+    }
+
+    if (this.value !== 1 && t >= this.until) this.value = 1;
     return this.value;
   }
+}
+
+/**
+ * Bir hiz programinin sahneye kattigi EK GERCEK sure (saniye).
+ *
+ * Klip kaydi icin sart: video uzunlugu gercek saniyeyle olculuyor, sahnenin
+ * cizelgesi ise olceklenmis saatte ilerliyor. 0,3 hizda gecen 900 ms sahneyi
+ * yalnizca 270 ms ilerletir; bu fark videoya eklenmezse klip dovus bitmeden
+ * kesilir.
+ */
+export function rampaEkSure(steps) {
+  let ek = 0;
+  let from = 1;
+  for (const s of steps) {
+    const ort = s.ramp ? (from + s.to) / 2 : s.to;
+    ek += (s.ms / 1000) * (1 - ort);
+    from = s.to;
+  }
+  return ek;
 }
 
 /** Ekran flasi -- WebGL'e dokunmadan, CSS overlay ile. */

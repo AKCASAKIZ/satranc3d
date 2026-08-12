@@ -390,6 +390,146 @@ export const VOICES = {
       }
     });
   },
+
+  /**
+   * Tekmenin degdigi an duyulan CATIRTI. `impact` tas malzemesini anlatiyor;
+   * bu, govdenin kendisinin verdigi kisa kuru kirilma. Sparta tekmesinde
+   * ikisi ust uste biniyor: once tas, sonra govde.
+   */
+  kirilma(bus, t, { power = 1 } = {}) {
+    transient(bus, t, { peak: 0.4 * power, freq: 2600, decay: 0.008 });
+    partials(bus, t, 214, [1, 2.31, 3.77, 6.2], {
+      type: "triangle",
+      decay: 0.11,
+      peak: 0.26 * power,
+      wet: 0.18,
+      spread: 0.35,
+    });
+    noiseBurst(bus, t + 0.012, { type: "bandpass", from: 1500, to: 420, q: 2.4, decay: 0.09, peak: 0.3 * power, wet: 0.22 });
+  },
+
+  /* ------------------------------------------------------------------
+   * MUZIK KATMANI
+   *
+   * Hazir parca yok: telif takibi Shorts'ta videoyu sessize alabiliyor ve
+   * her klip icin ayri lisans takip etmek isi durdurur. Ayrica muzigin
+   * dovusle KARE KARE hizalanmasi gerekiyor -- vurus muzigin vurusuna
+   * denk gelmezse ikisi de zayifliyor. Bu yuzden skor da ses efektleri
+   * gibi prosedurel ve ayni OfflineAudioContext'te render ediliyor.
+   * ------------------------------------------------------------------ */
+
+  /** Taiko: gogusten vuran deri davul. Tempoyu bu tasiyor. */
+  taiko(bus, t, { power = 1, pitch = 68 } = {}) {
+    const osc = bus.ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(pitch * 2.6, t);
+    osc.frequency.exponentialRampToValueAtTime(pitch, t + 0.09);
+    const e = envelope(bus, osc, t, { attack: 0.004, decay: 0.42, peak: 0.6 * power });
+    e.gain.connect(bus.master);
+    reverb(bus, e.gain, 0.3);
+    osc.start(t);
+    osc.stop(e.stopAt);
+    // Deri: tonun ustundeki kuru vurus
+    noiseBurst(bus, t, { type: "lowpass", from: 1800, to: 300, decay: 0.13, peak: 0.22 * power, wet: 0.2 });
+  },
+
+  /** Gong: tekmeden sonra salonu dolduran uzun bronz. Klipte BIR kez. */
+  gong(bus, t, { power = 1 } = {}) {
+    transient(bus, t, { peak: 0.2 * power, freq: 5200, decay: 0.02 });
+    // Inharmonik oranlar: tam harmonik olsa cana degil orga benziyor
+    partials(bus, t, 92, [1, 2.34, 3.61, 5.09, 7.42, 9.87], {
+      type: "sine",
+      decay: 2.6,
+      peak: 0.26 * power,
+      wet: 0.75,
+      spread: 0.7,
+    });
+    const sub = bus.ctx.createOscillator();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(58, t);
+    sub.frequency.exponentialRampToValueAtTime(41, t + 2.2);
+    const e = envelope(bus, sub, t, { attack: 0.01, decay: 2.4, peak: 0.34 * power });
+    e.gain.connect(bus.master);
+    reverb(bus, e.gain, 0.6);
+    sub.start(t);
+    sub.stop(e.stopAt);
+  },
+
+  /**
+   * Cekilen tel (guzheng tadinda): tirnak sesi + sonen kismi tonlar.
+   *
+   * Once Karplus-Strong yazilmisti (gecikme + alcak gecirgen geri besleme
+   * halkasi). OLCULDU, KULLANILAMAZ: halkadaki biquad'in rezonans tepesi
+   * dongu kazancini 1'in uzerine cikariyor ve nota SONMUYOR -- klibin
+   * 2,5. saniyesinden sonra tam skala sabit bir ugultu kaliyordu (tepe
+   * 1,8; ortalama seviye -24 dB'den -5 dB'ye firliyordu). Geri beslemeyi
+   * kirpmak da yetmedi. Toplamsal sentez bir tik daha az organik ama
+   * KOSULSUZ kararli: her nota mutlaka soner.
+   */
+  tel(bus, t, { power = 1, freq = 294, decay = 1.1, pan = 0 } = {}) {
+    const ctx = bus.ctx;
+    // Tirnagin tele degdigi an
+    transient(bus, t, { peak: 0.16 * power, freq: 5200, decay: 0.014, pan });
+
+    /* Kismi tonlar hafif AKORTSUZ (3,01 / 4,04 / 5,08): gercek telde ust
+       tonlar tam kat degil, sertlikten dolayi yukari kayiyor. Tam kat
+       oranlar org gibi duruyor. */
+    [1, 2, 3.01, 4.04, 5.08].forEach((ratio, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = i === 0 ? "triangle" : "sine";
+      osc.frequency.value = freq * ratio;
+      // Ust tonlar once soner -- telin "aydinlanip matlasmasi" bu
+      const sonum = decay * Math.pow(0.55, i);
+      const e = envelope(bus, osc, t, { attack: 0.004, decay: sonum, peak: (0.3 * power) / (i + 1.4) });
+      const out = panned(bus, e.gain, pan + ((i % 2 ? 1 : -1) * i) / 12);
+      out.connect(bus.master);
+      reverb(bus, out, 0.42);
+      osc.start(t);
+      osc.stop(e.stopAt);
+    });
+  },
+
+  /** Alt dron: sahnenin altinda duran gerilim. Duyulmuyor, hissediliyor. */
+  dron(bus, t, { power = 1, freq = 55, sure = 2 } = {}) {
+    for (const [ratio, pan] of [[1, -0.4], [1.5, 0.4]]) {
+      const osc = bus.ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.value = freq * ratio;
+      const lp = bus.ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.setValueAtTime(180, t);
+      lp.frequency.linearRampToValueAtTime(420, t + sure);
+      osc.connect(lp);
+      const e = envelope(bus, lp, t, { attack: 0.5, hold: sure, decay: 0.9, peak: 0.1 * power });
+      const out = panned(bus, e.gain, pan);
+      out.connect(bus.master);
+      osc.start(t);
+      osc.stop(e.stopAt);
+    }
+  },
+
+  /** Yukselen gerilim: tekmeden hemen once, kulagi carpmaya hazirliyor. */
+  yukselis(bus, t, { power = 1, sure = 0.9 } = {}) {
+    noiseBurst(bus, t, {
+      type: "bandpass",
+      from: 400,
+      to: 5200,
+      q: 1.1,
+      attack: sure * 0.8,
+      decay: 0.12,
+      peak: 0.3 * power,
+      wet: 0.5,
+    });
+    const osc = bus.ctx.createOscillator();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(140, t);
+    osc.frequency.exponentialRampToValueAtTime(560, t + sure);
+    const e = envelope(bus, osc, t, { attack: sure * 0.85, decay: 0.14, peak: 0.16 * power });
+    e.gain.connect(bus.master);
+    reverb(bus, e.gain, 0.4);
+    osc.start(t);
+    osc.stop(e.stopAt);
+  },
 };
 
 /** Bir ses olay listesini (at = saniye, klip basindan itibaren) bus'a yazar. */

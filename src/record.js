@@ -41,9 +41,16 @@ const TO = "d5";
 const PRE_ROLL = 0.3; // carpma oncesi nefes -- Shorts'ta ilk kare donuk olmamali
 const TAIL = 1.15; // parcalar yere insin, ses kuyrugu kesilmesin
 
-/** Klip suresi finisher suresine gore degisiyor; sah 1.55 sn, piyon 1.15 sn. */
-function clipLength(duration) {
-  return PRE_ROLL + duration + TAIL;
+/**
+ * Klip suresi finisher suresine gore degisiyor; sah 1.55 sn, piyon 1.15 sn.
+ *
+ * `rampa` yavas cekimin kattigi EK GERCEK sure. Sahnenin cizelgesi
+ * olceklenmis saatte, videonun uzunlugu gercek saniyede olculuyor; 0,3
+ * hizda gecen bir saniye sahneyi yalnizca 300 ms ilerletir. Eklenmezse
+ * Sparta klibi govde daha havadayken kesiliyor.
+ */
+function clipLength(duration, rampa = 0, tail = TAIL) {
+  return PRE_ROLL + duration + rampa + tail;
 }
 
 /**
@@ -54,15 +61,26 @@ function clipLength(duration) {
  * kuculuyor. Carpmaya kadar iceri dalis, carpmada mikro geri tepme,
  * sonrasinda yavas acilma.
  */
-function makeClipCamera({ from, to, impactTime, total, arcHeight = 0 }) {
+function makeClipCamera({ from, to, impactTime, total, arcHeight = 0, launch = null }) {
   // Bakis noktasi tahtanin biraz ustunde: dikey kadrajda kamera yatayken
   // ust yarisi bos gokyuzu oluyor, bakisi asagi cevirince tahta dolduruyor.
   const anchor = to.clone().lerp(from, 0.3).setY(0.55);
 
   const back = from.clone().sub(to).setY(0).normalize();
   const perp = new THREE.Vector3(back.z, 0, -back.x);
-  const dir = back.multiplyScalar(0.45).add(perp).normalize();
+  const dir = back.clone().multiplyScalar(0.45).add(perp).normalize();
   const theta0 = Math.atan2(dir.x, dir.z);
+
+  /* Savrulma icin kamera ACISI DEGISIYOR.
+     Yaklasma cekiminde kamera hareketin YANINDA duruyor -- tas ekrani
+     boydan boya gectigi icin "geliyor" hissi orada. Ama ucus ayni eksende:
+     dikey kadrajda yatay alan dar (9:16'da yatay gorus ~24 derece), govde
+     iki kare gidince ya kadraji tasiyor ya da geri cekmek gerekiyor ve iki
+     figur de kucucuk kaliyor. Kamera ucus boyunca saldiranin ARKASINA
+     kayarsa govde ekranda YUKARI dogru gidiyor ve kadrajin uzun kenari
+     kullaniliyor. Tam eksene oturmuyor (0,28 rad pay): tam arkadan cekim
+     duz ve derinliksiz. */
+  const thetaArka = Math.atan2(back.x, back.z) + 0.28;
 
   // Sicrayan taslar (at 2.3, kale 1.9, vezir 1.4 birim yukseliyor) yakin
   // planda kadrajin ustunden tasiyordu. Yaklasma mesafesi hareketin
@@ -70,10 +88,32 @@ function makeClipCamera({ from, to, impactTime, total, arcHeight = 0 }) {
   const near = 4.3 + arcHeight * 0.62;
   const far = near + 2.1;
 
+  /* Savrulan govde kadrajin disina cikmasin.
+     Ilk deneme bakis noktasini ucus YONUNDE kaydiriyordu; olculdu, yanlisti:
+     govde iki kare gidince saldiran kadrajin solundan tasiyor ve son iki
+     saniye bos tahtaya bakiliyor. Dogrusu bakis noktasini iki figurun
+     ORTASINA baglamak -- kadraj ikisini de tutuyor, hiz hissi de kayboluyor
+     degil cunku kamera yalniz yarim yolu gidiyor. Konumlar deterministik
+     oldugu icin bu hala ayni videoyu uretiyor. */
+  const anchorT = anchor.clone();
+  const hedef = new THREE.Vector3();
+  let sonT = null;
+
   return (camera, t) => {
     let radius;
     let phi;
     let theta;
+
+    const dt = sonT == null ? 0 : Math.max(0, t - sonT);
+    sonT = t;
+
+    if (launch && t > launch.at) {
+      hedef.copy(launch.orta()).setY(0.46);
+      // Yumusatma: ani gecis "kamera sicradi" gibi okunuyor
+      anchorT.lerp(hedef, 1 - Math.exp(-5 * dt));
+    } else {
+      anchorT.copy(anchor);
+    }
 
     if (t < impactTime) {
       const k = Math.min(1, t / Math.max(0.001, impactTime));
@@ -91,10 +131,24 @@ function makeClipCamera({ from, to, impactTime, total, arcHeight = 0 }) {
       theta = theta0 + 0.3 + 0.38 * e;
     }
 
+    if (launch && t > launch.at) {
+      // Ucus suresince arkaya kayis; en kisa yoldan (aci farkini +-pi'ye
+      // indirgeyerek), yoksa kamera bazen tahtanin etrafinda ters yonden
+      // dolasiyor.
+      const k = Math.min(1, (t - launch.at) / Math.max(0.001, launch.dur * 1.15));
+      const e = 1 - Math.pow(1 - k, 3);
+      const fark = ((thetaArka - theta + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+      theta += fark * e;
+      // Arkaya gecince govde ekranda yukari gidiyor; asagidan bakmak
+      // ucusu yukseltiyor.
+      phi += 0.1 * e;
+      radius += 0.55 * e;
+    }
+
     const s = new THREE.Spherical(radius, phi, theta);
     s.makeSafe();
-    camera.position.copy(anchor).add(new THREE.Vector3().setFromSpherical(s));
-    camera.lookAt(anchor);
+    camera.position.copy(anchorT).add(new THREE.Vector3().setFromSpherical(s));
+    camera.lookAt(anchorT);
   };
 }
 
@@ -191,28 +245,51 @@ async function recordOne({ spec, scene, assets, settings, renderer, canvas2d, op
   // runFinisher tick'ini bir microtask sonra kaydediyor
   await new Promise((r) => setTimeout(r, 0));
 
-  const timing = finisherTiming(attackerType, settings.duel, squareToWorld(FROM).distanceTo(squareToWorld(TO)));
-  const total = clipLength(timing.duration);
+  const fromPos = squareToWorld(FROM);
+  const toPos = squareToWorld(TO);
+  const timing = finisherTiming(attackerType, settings.duel, fromPos.distanceTo(toPos));
+  // Savrulmali klipte kuyruk kisa: molozun inmesi ve sesin sonmesi zaten
+  // ucus boyunca oluyor, uzun kuyruk bos tahtaya bakmak demek.
+  const total = clipLength(timing.duration, timing.rampa, timing.ucus > 0 ? 0.7 : TAIL);
   const frames = Math.round(total * fps);
   const step = 1 / fps;
 
+  /* Kamera SAHNE saatinde surulur, gercek saatte degil.
+     Yavas cekim sahneyi yavaslatiyor; kamera gercek saatte kalsaydi
+     govde havada asili dururken kamera yolunu bitirip donardi. Ayni
+     saati kullanmak yavas cekimi kameraya da tasiyor -- 300 estetiginin
+     yarisi bu. */
+  const camTotal = PRE_ROLL + timing.duration;
   const cam = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
   const camPath = makeClipCamera({
-    from: squareToWorld(FROM),
-    to: squareToWorld(TO),
+    from: fromPos,
+    to: toPos,
     impactTime: PRE_ROLL + timing.impactAt * timing.duration,
-    total,
+    total: camTotal,
     arcHeight: timing.arc,
+    launch:
+      timing.ucus > 0
+        ? {
+            at: PRE_ROLL + timing.impactAt * timing.duration,
+            dur: timing.ucus,
+            // 0,55 denendi: bakis kurbana fazla yakin kalinca saldiran sol
+            // kenardan tasiyordu. 0,42 ikisini de iceride tutuyor.
+            orta: () => attacker.position.clone().lerp(victim.position, 0.42),
+            acilma: () => attacker.position.distanceTo(victim.position),
+          }
+        : null,
   });
 
   const ctx2d = canvas2d.getContext("2d");
 
+  let sahneT = 0; // olceklenmis (sahne) saat -- kamera bunu takip ediyor
   for (let i = 0; i < frames; i++) {
-    if (elapsed >= PRE_ROLL) clock.tick(step);
+    if (elapsed >= PRE_ROLL) sahneT += clock.tick(step);
     // Sarsinti kameradan bagimsiz surulmeli; rig yok
     const shakeOffset = shake.update(step);
 
-    camPath(cam, elapsed);
+    // Pre-roll'da sahne donuk ama kamera akmali: ilk kare olu olmasin.
+    camPath(cam, elapsed < PRE_ROLL ? elapsed : PRE_ROLL + sahneT);
     if (shakeOffset) cam.position.add(new THREE.Vector3(shakeOffset.x, shakeOffset.y, shakeOffset.z));
 
     renderer.render(scene, cam);
@@ -273,7 +350,8 @@ export async function runRecord({ params, scene, settings, assets }) {
   const label = params.get("label") !== "0";
   const spec = params.get("clip") || "qxp";
   // Klipler her zaman tam dovusu gosteriyor -- pazarlama icerigi bu
-  settings.duel = params.get("duel") || "tam";
+  // Kliplerde varsayilan SPARTA: kanalin tum degeri son tekmede.
+  settings.duel = params.get("duel") || "sparta";
   const specs = spec === "all" ? ALL_SPECS : spec === "yeni" ? YENI_SPECS : [spec];
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });

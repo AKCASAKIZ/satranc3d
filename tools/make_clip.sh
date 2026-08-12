@@ -24,7 +24,7 @@ curl -sf -o /dev/null "http://127.0.0.1:5180/" || { echo "dev sunucusu kapali: n
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-URL="http://127.0.0.1:5180/?clip=${SPEC}&w=${W}&fps=${FPS}"
+URL="http://127.0.0.1:5180/?clip=${SPEC}&w=${W}&fps=${FPS}${EXTRA:-}"
 echo "kayit: $URL"
 
 # Yazilim rasterizasyonu: makinede GPU'ya bagli kalmadan ayni sonucu verir.
