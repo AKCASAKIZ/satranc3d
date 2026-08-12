@@ -128,11 +128,15 @@ Yeni spec eklemek tek satır; üretim klip başına ~35 sn.
 | # | Video | Yayın | Link |
 |---|---|---|---|
 | 1 | The king finishes a pawn | 🟢 **canlı** 11 Ağu | shorts/ZUIqe6ubDdc |
-| 2 | Queen takes rook | 🕐 13 Ağu 18:00 | shorts/YqiBC0hZtWA |
-| 3 | Knight takes bishop | 🕐 15 Ağu 18:00 | shorts/vTQ_wKF3_Y8 |
-| 4 | Rook takes queen | 🕐 18 Ağu 18:00 | shorts/SB0YS86Al34 |
-| 5 | The fan beats the swords | 🕐 20 Ağu 18:00 | shorts/RB3JNfiZMTI |
-| 6 | Two novices, one square | 🕐 22 Ağu 18:00 | shorts/dknZEBojy6I |
+| 2 | Queen takes rook | 🕐 12 Ağu 18:00 | shorts/0aGN09VUK20 |
+| 3 | Knight takes bishop | 🕐 13 Ağu 18:00 | shorts/zstnW5TJpfE |
+| 4 | Rook takes queen | 🕐 14 Ağu 18:00 | shorts/qVPbfCKhnsQ |
+| 5 | The fan beats the swords | 🕐 15 Ağu 18:00 | shorts/D-JGUBkozso |
+| 6 | Two novices, one square | 🕐 16 Ağu 18:00 | shorts/qKWYqfGyFzo |
+
+> Kimlikler ve tarihler 12 Ağustos'ta DEĞİŞTİ: 2-6 silinip Sparta tekmeli
+> sürümleriyle yeniden yüklendi (bkz. `degistirme-12agu.md`). Takvim de
+> düzeltildi -- gerçekte Pzt/Çar/Cum değil, HER GÜN 18:00'di.
 
 Hepsi "çocuklara özel değil" işaretli, saat 18:00 (gece yarısı varsayılanı
 kötü bir yayın saati). Hat 22 Ağustos'a kadar dolu.

@@ -7,13 +7,17 @@ buraya kopyalandı — silme geri alınamaz, metin kaybolmasın.
 Hepsi: **"çocuklara özel değil"**, saat **18:00**, açıklamadaki oyun linki
 `?s=yt` izleme parametresiyle (notlarda bu yazmıyordu).
 
-| Sıra | Eski kimlik | Yeni dosya | Tarih |
-|---|---|---|---|
-| 2 | `YqiBC0hZtWA` | `out/yeni_sparta/qxr.mp4` | 12 Ağu 18:00 |
-| 3 | `vTQ_wKF3_Y8` | `out/yeni_sparta/nxb.mp4` | 13 Ağu 18:00 |
-| 4 | `SB0YS86Al34` | `out/yeni_sparta/rxq.mp4` | 14 Ağu 18:00 |
-| 5 | `RB3JNfiZMTI` | `out/yeni_sparta/bxn.mp4` | 15 Ağu 18:00 |
-| 6 | `dknZEBojy6I` | `out/yeni_sparta/pxp.mp4` | 16 Ağu 18:00 |
+| Sıra | Eski kimlik (silindi) | Yeni dosya | **Yeni kimlik** | Tarih |
+|---|---|---|---|---|
+| 2 | `YqiBC0hZtWA` | `qxr.mp4` | **`0aGN09VUK20`** | 12 Ağu 18:00 |
+| 3 | `vTQ_wKF3_Y8` | `nxb.mp4` | **`zstnW5TJpfE`** | 13 Ağu 18:00 |
+| 4 | `SB0YS86Al34` | `rxq.mp4` | **`qVPbfCKhnsQ`** | 14 Ağu 18:00 |
+| 5 | `RB3JNfiZMTI` | `bxn.mp4` | **`D-JGUBkozso`** | 15 Ağu 18:00 |
+| 6 | `dknZEBojy6I` | `pxp.mp4` | **`qKWYqfGyFzo`** | 16 Ağu 18:00 |
+
+**Durum: BEŞİ DE DEĞİŞTİRİLDİ ve doğrulandı** (12 Ağu, Studio listesinden
+okundu: hepsi "Planlandı", saat 18:00, "çocuklara özel değil" her birinde
+`aria-checked` ile teyit edildi). Eski kimlikler artık ölü bağlantı.
 
 Yayındaki 1. video (`ZUIqe6ubDdc`, 11 Ağu) dokunulmuyor — kullanıcı kararı.
 
