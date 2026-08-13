@@ -10,9 +10,93 @@ dolaşılamıyor — bu yüzden üçü de bu belgenin dışında.
 
 ---
 
-## 1 · itch.io — HTML5 sayfası
+## 1 · itch.io — YAYINDA (13 Ağu)
 
-Yüklenecek dosya hazır: **`out/itch-kungfu-chess.zip`** (5,3 MB).
+**https://whitegum.itch.io/kung-fu-chess-3d** — durum **PUBLIC**.
+Hesap zaten vardı (`whitegum`), bu ilk proje.
+
+Doğrulama varsayımla değil ölçümle yapıldı: sayfa **oturumsuz ve çerezsiz**
+(curl) istendi -> HTTP 200, DRAFT işareti yok, açıklama ve "Run game" anonim
+ziyaretçiye görünüyor. Kendi oturumunda görünüyor olması kanıt sayılmadı.
+
+Zip yüklendikten sonra oyun itch'in iframe'inde **çalıştırılarak** denendi:
+tahta yükleniyor, HUD geliyor. `base: "./"` kararı burada karşılığını verdi -
+aynı derleme hem GitHub Pages alt dizininde hem `html.itch.zone` yolunda
+çalışıyor, ayrı build gerekmedi.
+
+Doldurulanlar: başlık, tagline, Classification=Games, **Kind of project=HTML**,
+Release status=Released, **Pricing=No payments**, kadraj **1280×720**,
+Mobile friendly ✓, Fullscreen button ✓, sayfa metni, Genre=Strategy,
+etiketler (chess, kung-fu, 3d, singleplayer, fighting), Comments açık,
+fragman = yayındaki 1. video (`ZUIqe6ubDdc`).
+
+Bilerek işaretlenmeyenler:
+- **"Automatically start on page load" KAPALI.** 12 MB'lık WebGL oyunu sayfayı
+  açan herkese indirtmek hem bant genişliği hem de sesin izinsiz başlaması
+  demek. Oyuncu "Run game"e bassın.
+- **Enable scrollbars kapalı** — tuval sabit, iframe'de kaydırma çubuğu
+  istemiyoruz.
+
+### Tamamlanan adımlar
+- Zip yüklendi (`itch-kungfu-chess.zip`, 5 MB) + "played in the browser" ✓
+- Kapak görseli kondu (düello karesi)
+- Public'e alındı
+
+### KALAN TEK İŞ: ekran görüntüleri yüklenecek (elle)
+
+Beş kare hazır, 1600×900:
+  `out/itch-screens/` ve kolay erişim için `~/Desktop/itch-ekran-goruntuleri/`
+    1_kilic-carpismasi · 2_sparta-tekmesi · 3_tahtadan-savrulma ·
+    4_yildirim · 5_parcalanma
+Sıra bilerek numaralı: ilk görüntü arama kartında öne çıkan.
+Yükleme yeri: Edit game → sağ kolon → **Add screenshots**.
+
+Neden ajan yapamadı: işletim sisteminin dosya seçme penceresi tarayıcı
+otomasyonuna kapalı (zip ve kapakta da aynı sebep).
+
+### ÜRETİMDE ÖLÇÜLEN TUZAK - klip etiketi kareye gömülü geliyor
+
+İlk üretimdeki beş kare "KING × QUEEN · Kung-Fu Chess 3D · link in profile"
+yazısını taşıyordu. Shorts için doğru, MAĞAZA SAYFASINDA SAÇMA ("link in
+profile" diye bir şey yok). `?clip=...&label=0` ile yeniden alındı.
+
+!! ASIL TUZAK BUNUN ALTINDA: ilk render'ın Chrome'u kapatılmamıştı ve
+   `out/clips/kxq` silindikten SONRA etiketli kareleri yazmaya devam etti.
+   Yani "temiz render" sanılan 70 kare aslında birincinin devamıydı.
+   Gözle bakmak yetmedi, ölçüldü: etiket bölgesinin en parlak pikseli
+   239 (beyaz yazı) -> 148 (tahta rengi). Sonraki üretimde ÖNCE
+   `pkill -f "Google Chrome --headless=new"`.
+
+!! `tools/make_clip.sh` KULLANILMADI. İlk satırlarında `rm -rf out/clips`
+   var ve orada Ağustos sonu videolarının 4 mp4'ü duruyor. Klip modu
+   doğrudan sürüldü (`?clip=kxq&w=1600&h=900&fps=10&label=0`); kamera
+   `w/h` aspect'i aldığı için yatay kadraj sorunsuz.
+
+### AI beyanı — KARAR VERİLDİ (13 Ağu, kullanıcı onayı)
+
+**"No"** işaretlendi ve açıklamaya şu cümle eklendi:
+
+> The 3D pieces and the music are procedurally generated — no AI image or audio
+> models were used. The code was written with AI assistance.
+
+Gerekçe üç parçalı:
+1. itch'in sorusu üretici AI ile **üretilmiş içeriği** soruyor (Midjourney,
+   Stable Diffusion, ChatGPT metni). Taşlar `gen_pieces.py` ile prosedürel,
+   müzik `src/fx/score.js`'te toplamsal sentez - ikisi de algoritma, difüzyon
+   modeli değil. Buraya "evet" demek AI görselinden kaçınmak için filtre
+   kullanan oyuncuya YANLIS bilgi vermek olurdu.
+2. **`no-ai` etiketi ALINMADI** - o etiket "projede hiçbir yerde AI yok"
+   iddiası, kod AI destekli yazıldığı için doğru olmazdı.
+3. Cümle açıklamada duruyor çünkü itch'in metni "even if you hand-edited it"
+   diyor, yani geniş. Kodun AI destekli olduğunu saklamak, sonradan fark
+   edilirse pahalıya gelir. Yanlış olan orta yol: hiçbir şey söylemeden
+   "hayır" demek.
+
+Doğrulandı: sayfa metni canlıdan okundu, cümle duruyor; "Saved" onayı geldi.
+
+### Yükleme dosyası
+
+**`out/itch-kungfu-chess.zip`** (5,3 MB).
 
 `dist/` derlemesinin kendisi, `index.html` arşivin **kökünde** — itch bunu
 şart koşuyor, alt klasöre girmiş index.html'i bulamıyor.
