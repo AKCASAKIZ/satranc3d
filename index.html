@@ -1,5 +1,12 @@
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<!-- PWA: telefonda "ana ekrana ekle" ile magaza olmadan uygulama gibi kurulsun.
+     Yol GORELI (`./`) - oyun site kokunde de, /satranc3d/ alt dizininde de,
+     itch.io'nun rastgele yolunda da ayni derlemeyle calisiyor (vite base:"./"). -->
+<link rel="manifest" href="./manifest.webmanifest" />
+<meta name="theme-color" content="#151719" />
+<link rel="apple-touch-icon" href="./icon-192.png" />
+<meta name="mobile-web-app-capable" content="yes" />
 <title>Kung-Fu Chess 3D</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -128,6 +135,22 @@
     _gc.src = "https://gc.zgo.at/count.js";
     _gc.setAttribute("data-goatcounter", "https://whitegum.goatcounter.com/count");
     document.head.appendChild(_gc);
+  }
+
+  /* Service worker: PWA kurulumu + ilk ziyaretten sonra cevrimdisi oynama.
+     Iki kosul da ZORUNLU:
+     - IFRAME'DE KAYIT ETME. CrazyGames ve itch.io oyunu kendi alan adlarinda
+       iframe icinde servis ediyor; orada worker'in kapsami bize ait degil,
+       kurulabilir uygulama diye bir sey de yok. Portalin olcumune bulasmanin
+       da anlami yok.
+     - Guvenli baglam sart. file:// ile acilan pakette (CrazyGames teknik
+       incelemesi oyunu boyle de aciyor) registration hata firlatir. */
+  if (window.top === window && "serviceWorker" in navigator) {
+    addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js").catch(function () {
+        /* PWA olmazsa oyun yine calisiyor - sessizce gec. */
+      });
+    });
   }
 </script>
 
