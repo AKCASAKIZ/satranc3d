@@ -78,7 +78,7 @@ export function createUI({ scene, rig, settings, clock, onOpponentChange }) {
   const toggle = document.createElement("button");
   toggle.className = "gear";
   toggle.innerHTML = "&#9881;";
-  toggle.title = "Ayarlar";
+  toggle.title = "Settings";
   root.appendChild(toggle);
 
   const panel = document.createElement("div");
@@ -101,7 +101,7 @@ export function createUI({ scene, rig, settings, clock, onOpponentChange }) {
     .join("");
 
   panel.innerHTML = `
-    <h3>Rakip</h3>
+    <h3>Opponent</h3>
     <div class="seg" id="opponent">
       <button data-opp="insan">Human</button>
       <button data-opp="kolay">Easy</button>
@@ -112,18 +112,18 @@ export function createUI({ scene, rig, settings, clock, onOpponentChange }) {
       <button data-side="w">Play White</button>
       <button data-side="b">Play Black</button>
     </div>
-    <h3>Renk temasi</h3>
+    <h3>Board theme</h3>
     <div class="swatches">${swatches}</div>
-    <h3>Oldurus</h3>
+    <h3>Finisher</h3>
     <div class="seg" id="duel">
       ${Object.entries(DUEL_MODES)
         .map(([key, label]) => `<button data-duel="${key}">${label}</button>`)
         .join("")}
     </div>
-    <h3>Kamera</h3>
+    <h3>Camera</h3>
     <label class="row">
       <input type="checkbox" id="cinematic" ${settings.cinematic ? "checked" : ""}>
-      <span>Oldurus aninda sinematik cekim</span>
+      <span>Cinematic camera on captures</span>
     </label>
     <p class="hint">Drag the board to look around · pinch or scroll to zoom.</p>
   `;

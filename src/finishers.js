@@ -157,10 +157,10 @@ const MABU_LEN = 0.95; // ban ma bu'da gecen sure (klip dongusel)
 
 /** Dovus uzunlugu ayari. UI'da "Oldurus" basligi altinda. */
 export const DUEL_MODES = {
-  sparta: "Sparta tekmesi",
-  tam: "Tam dovus",
-  kisa: "Tek darbe",
-  kapali: "Kapali",
+  sparta: "Sparta kick",
+  tam: "Full duel",
+  kisa: "Single strike",
+  kapali: "Off",
 };
 
 const duelMode = (settings) => (settings?.duel in DUEL_MODES ? settings.duel : "kisa");

@@ -15,7 +15,7 @@ import { applyEnvironment } from "./env.js";
  */
 export const THEMES = {
   klasik: {
-    label: "Klasik",
+    label: "Classic",
     light: 0xe8dcc0,
     dark: 0x6f5842,
     frame: 0x3b2d22,
@@ -27,7 +27,7 @@ export const THEMES = {
     env: { sis: { renk: 0x151719, yakin: 16, uzak: 46 }, zemin: 0x0d0f11 },
   },
   mermer: {
-    label: "Mermer",
+    label: "Marble",
     light: 0xf1f0ec,
     dark: 0x8d9299,
     frame: 0x4a4f55,
@@ -39,7 +39,7 @@ export const THEMES = {
            siluet: { tur: "sutun", renk: 0x2a2f36, sayi: 18, mesafe: 15 } },
   },
   ceviz: {
-    label: "Ceviz",
+    label: "Walnut",
     light: 0xd9b98c,
     dark: 0x5d3a1f,
     frame: 0x33200f,
@@ -52,7 +52,7 @@ export const THEMES = {
            cim: { dip: 0x2e281c, uc: 0x554832, sayi: 16000, yaricap: 13 } },
   },
   gece: {
-    label: "Gece",
+    label: "Night",
     light: 0x3d4a5c,
     dark: 0x1e2632,
     frame: 0x121821,
@@ -65,7 +65,7 @@ export const THEMES = {
            fener: { sayi: 10, mesafe: 12, renk: 0xff9d5c } },
   },
   orman: {
-    label: "Orman",
+    label: "Forest",
     light: 0xdfe4cf,
     dark: 0x4a6141,
     frame: 0x27331f,
@@ -78,7 +78,7 @@ export const THEMES = {
            cim: { dip: 0x28382a, uc: 0x4a6642, sayi: 22000, yaricap: 14 } },
   },
   kum: {
-    label: "Kum",
+    label: "Sand",
     light: 0xf0e2c4,
     dark: 0xc08f5a,
     frame: 0x6d4a2a,

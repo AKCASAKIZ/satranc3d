@@ -553,7 +553,7 @@ async function boot() {
     // mutlak "/glb" yaziliydi ve alt dizinden servis edilince (GitHub Pages
     // proje sitesi) 12 GLB'nin hepsi 404 veriyordu - olculdu 10-08-2026.
     const assets = await loadWarriors(undefined, (done, total) => {
-      statusEl.textContent = `Savascilar yukleniyor ${done}/${total}`;
+      statusEl.textContent = `Loading warriors ${done}/${total}`;
     });
 
     // Kare kare dogrulama modu -- normal oyunu hic kurmadan tek kare uretir
@@ -617,7 +617,7 @@ async function boot() {
     loop();
     maybeAiMove();
   } catch (err) {
-    statusEl.textContent = "Yukleme hatasi: " + err.message;
+    statusEl.textContent = "Loading failed: " + err.message;
     console.error(err);
   }
 }
