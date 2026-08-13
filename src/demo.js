@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { squareToWorld } from "./board.js";
-import { createPiece, attachActorClock, resetIdlePhase } from "./pieces.js";
+import { createPiece, attachActorClock, resetIdlePhase, POZ } from "./pieces.js";
 import { runFinisher } from "./finishers.js";
 import { Clock } from "./clock.js";
 import { TimeScale } from "./fx/impact.js";
@@ -21,6 +21,8 @@ import { TimeScale } from "./fx/impact.js";
 // Zaman noktalari dovusun fazlarina denk geliyor: yurume, savurma, vurus,
 // olum, silinme, toparlanma. Klipler kisalir/uzarsa buranin da guncellenmesi
 // gerekiyor -- degerler planFinisher'in ciktisiyla elle hizalandi.
+// `?times=0,1,2` ile gecici olarak baska anlara bakilabiliyor: sparta gibi
+// uzun dovuslerin kuyrugu bu listenin disinda kaliyor.
 const TIMES = [0.0, 0.32, 0.62, 0.95, 1.5, 2.3];
 const ALL_SPECS = ["pxp", "rxp", "nxp", "bxp", "qxp", "kxp"];
 const NAMES = { p: "PIYON", r: "KALE", n: "AT", b: "FIL", q: "VEZIR", k: "SAH" };
@@ -63,8 +65,14 @@ export async function runDemo({ params, scene, settings, assets }) {
   cam.position.copy(look).add(new THREE.Vector3().setFromSpherical(s));
   cam.lookAt(look);
 
+  const times = (params.get("times") || "")
+    .split(",")
+    .map(Number)
+    .filter(Number.isFinite);
+  if (!times.length) times.push(...TIMES);
+
   const sheet = document.createElement("canvas");
-  sheet.width = TILE_W * TIMES.length;
+  sheet.width = TILE_W * times.length;
   sheet.height = TILE_H * specs.length;
   const ctx = sheet.getContext("2d");
   ctx.fillStyle = "#0b0d10";
@@ -73,8 +81,8 @@ export async function runDemo({ params, scene, settings, assets }) {
   for (let row = 0; row < specs.length; row++) {
     const [attackerType = "p", victimType = "p"] = specs[row].split("x");
 
-    for (let col = 0; col < TIMES.length; col++) {
-      const t = TIMES[col];
+    for (let col = 0; col < times.length; col++) {
+      const t = times[col];
       const keep = new Set(scene.children);
 
       resetIdlePhase();
@@ -89,9 +97,35 @@ export async function runDemo({ params, scene, settings, assets }) {
       const timeScale = new TimeScale();
       timeScale.freeze = () => {};
       timeScale.slow = () => {};
+      // Sparta rampasi da kapali olmali: yavas cekim sahne saatini gerçek
+      // zamana bagliyor, sabit adimla ilerleyen bu modda dovus t saniyede
+      // bitmiyor (olculdu: t=5.9'da govde hala havadaydi).
+      timeScale.sequence = () => {};
       const clock = new Clock(timeScale);
       // Iskelet klipleri de bu karenin saatinden beslenmeli
       attachActorClock(clock);
+
+      if (params.has("poz")) {
+        // Poz ayarlama modu: dovus yok, sadece Idle + poz.
+        attacker.position.copy(squareToWorld(TO));
+        attacker.faceTowards(cam.position);
+        victim.visible = false;
+        // Bu modda `times` sure degil, POZ acilarinin CARPANI: tek render'da
+        // birkac varyant yan yana gorunuyor (isaret/siddet ayari icin).
+        const taban = POZ[params.get("poz")] || {};
+        const olcekli = {};
+        for (const [ad, acilar] of Object.entries(taban)) {
+          olcekli[ad] = Object.fromEntries(Object.entries(acilar).map(([e, a]) => [e, a * t]));
+        }
+        attacker.poz(olcekli, { gir: 0.001, sure: 99 });
+        for (let acc = 0; acc < 0.05; acc += 1 / 120) clock.tick(1 / 120);
+        renderer.render(scene, cam);
+        ctx.drawImage(renderer.domElement, col * TILE_W, row * TILE_H);
+        attacker.dispose();
+        victim.dispose();
+        for (const child of [...scene.children]) if (!keep.has(child)) scene.remove(child);
+        continue;
+      }
 
       runFinisher({
         scene,

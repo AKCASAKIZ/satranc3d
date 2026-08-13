@@ -14,6 +14,7 @@ import {
   CLIP_LENGTH,
   EK_LENGTH,
   KICK_IMPACT,
+  POZ,
   kalabalikBaksin,
 } from "./pieces.js";
 
@@ -142,6 +143,18 @@ const SPARTA_CARPMA_RAMPA = [
   { to: 1.0, ms: 260, ramp: true },
 ];
 
+/* Tekmeden sonraki BITIS DURUSLARI (12 Agu 2026 karari):
+     du li bu (tek ayak) -> ban ma bu (yarim at duruşu) -> Idle.
+   Eskiden burada Victory klibinin yarisi oynayip Idle'a geciliyordu.
+
+   ban ma bu = `Stance_Ready` klibi. du li bu ise sette YOK: README Victory'i
+   "beyaz turna duruşu" diye veriyor ama ekranda olculdu, klip boyunca iki
+   ayak da yerde. Bu yuzden du li bu klip degil, kemik pozu (POZ.DULI_BU) --
+   Idle'in uzerine biniyor, nefes duruyor. */
+const DULI_GIRIS = 0.35; // Idle'dan tek ayaga gecis
+const DULI_LEN = 1.15; // du li bu'da gecen sure (giris dahil)
+const MABU_LEN = 0.95; // ban ma bu'da gecen sure (klip dongusel)
+
 /** Dovus uzunlugu ayari. UI'da "Oldurus" basligi altinda. */
 export const DUEL_MODES = {
   sparta: "Sparta tekmesi",
@@ -197,8 +210,11 @@ export function planFinisher(type, mode = "kisa", dist = 1) {
     // binmezse arada olu an oluyor.
     const advanceStart = carpma;
     const advanceEnd = advanceStart + ADVANCE;
-    const victoryStart = advanceEnd;
-    const victoryEnd = victoryStart + (CLIP_LENGTH[CLIP.VICTORY] / SPEED.victory) * 0.5;
+    // Bitis: du li bu (poz) -> ban ma bu (Stance_Ready) -> Idle.
+    const duliStart = advanceEnd;
+    const duliEnd = duliStart + DULI_LEN;
+    const mabuStart = duliEnd;
+    const mabuEnd = mabuStart + MABU_LEN;
     const fadeStart = carpma + SPARTA_HOLD;
 
     return {
@@ -220,9 +236,11 @@ export function planFinisher(type, mode = "kisa", dist = 1) {
       fadeStart,
       advanceStart,
       advanceEnd,
-      victoryStart,
-      victoryEnd,
-      total: Math.max(fadeStart + FADE, victoryEnd),
+      duliStart,
+      duliEnd,
+      mabuStart,
+      mabuEnd,
+      total: Math.max(fadeStart + FADE, mabuEnd),
     };
   }
 
@@ -436,15 +454,30 @@ export function runFinisher({
             t: plan.advanceStart,
             run: () => attacker.play(CLIP.WALK, { loop: true, speed: yuruHizi(plan.ilerlemeKareSn) }),
           });
+          // 4) Bitis duruslari: du li bu -> ban ma bu -> Idle.
           cues.push({
             t: plan.advanceEnd,
             run: () => {
               fx.sound("place");
-              attacker.play(CLIP.VICTORY, { loop: false, speed: SPEED.victory });
+              // Poz Idle'in uzerine biniyor; klip degil (bkz. POZ.DULI_BU).
+              attacker.idle(0.25);
+              // Poz ma bu klibi devralana kadar duruyor; cozulmesi o gecisle ortusuyor,
+              // yoksa iki durus arasinda notr bir an olusuyor.
+              attacker.poz?.(POZ.DULI_BU, { gir: DULI_GIRIS, sure: DULI_LEN, cik: 0.32 });
               fx.sound("victory", { power: p }, 0.18);
             },
           });
-          cues.push({ t: plan.victoryEnd, run: () => attacker.idle(0.35) });
+          cues.push({
+            t: plan.mabuStart,
+            run: () => {
+              // Ayak yere basarken ma bu'ya oturuyor; pozun cikisi bu gecise
+              // denk geliyor. Eski savasci setinde Stance_Ready yok -> Idle.
+              const sure = attacker.play(CLIP_EK.STANCE, { loop: true, fade: 0.32 });
+              if (!sure) attacker.idle(0.3);
+              else fx.sound("step", { power: 0.45 * p });
+            },
+          });
+          cues.push({ t: plan.mabuEnd, run: () => attacker.idle(0.4) });
         } else {
           cues.push({
             t: 0,

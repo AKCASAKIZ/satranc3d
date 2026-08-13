@@ -150,6 +150,56 @@ const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _q1 = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
+const _q3 = new THREE.Quaternion();
+
+/**
+ * ELLE YAZILMIS DURUSLAR.
+ *
+ * Sette karsiligi olmayan pozlar icin klip uretmek yerine kemikler mikserden
+ * SONRA eziliyor (bkz. basiGuncelle -- ayni sira zorunlulugu gecerli).
+ *
+ * `du li bu` (tek ayak / turna durusu) sette YOK. README `Victory`i "beyaz
+ * turna duruşu" diye veriyor ama ekranda olculdu (12 Agu 2026): klip boyunca
+ * iki ayak da yerde, tek ayak durusu hic gecmiyor. Set belgelerine guvenme,
+ * GLB'den olc -- bu projede ucuncu kez ayni tuzak.
+ *
+ * Acilar karakterin KENDI eksenlerinde: pitch = one/arkaya, roll = yana,
+ * yaw = govde ekseni etrafinda. Boylece tas tahtada hangi yone bakarsa baksin
+ * durus dogru kaliyor. Degerler radyan ve poz Idle'in UZERINE ekleniyor
+ * (nefes duruyor, heykel gibi donmuyor).
+ */
+/**
+ * GLTFLoader dugum adlarindaki noktayi SILIYOR: sette `thigh.R` olan kemik
+ * sahnede `thighR` oluyor (olculdu 12 Agu 2026 -- poz once hic tutmadi,
+ * sebebi buydu). Duruslar set belgelerindeki adlarla yazilabilsin diye
+ * arama sirasinda ayni temizlik uygulaniyor.
+ */
+const kemikAdi = (ad) => ad.replace(/[.:/[\]]/g, "");
+
+/** Karakterin kendi eksenleri (model +Z'ye bakiyor). */
+const POZ_EKSEN = {
+  pitch: new THREE.Vector3(1, 0, 0), // eksi = one/yukari
+  roll: new THREE.Vector3(0, 0, 1), // yana acilma
+  yaw: new THREE.Vector3(0, 1, 0), // govde ekseni
+};
+
+export const POZ = {
+  /** Du li bu: sag diz gogse dogru kalkiyor, govde sol ayakta toplaniyor. */
+  DULI_BU: {
+    // Isaret olculdu: bu rig'de ARTI pitch bacagi one/yukari kaldiriyor
+    // (eksi one degil, geriye hamle attiriyor).
+    "thigh.R": { pitch: 1.45 },
+    "shin.R": { pitch: -1.75 },
+    "foot.R": { pitch: -0.5 },
+    "thigh.L": { pitch: -0.12 },
+    spine: { pitch: 0.1 },
+    chest: { pitch: 0.06 },
+    "upperarm.R": { pitch: 0.55, roll: 0.35 },
+    "forearm.R": { pitch: 0.7 },
+    "upperarm.L": { pitch: -0.3, roll: -0.4 },
+    "forearm.L": { pitch: 0.5 },
+  },
+};
 
 /**
  * Bir noktaya bakilmasini soyler: `renk` tarafindaki, `yaricap` icindeki
@@ -340,7 +390,19 @@ export class PieceActor extends THREE.Group {
 
     // Bas cevirme icin (bkz. bakisAc). Kemik yoksa ozellik sessizce kapali.
     this.headBone = null;
-    this.model.traverse((o) => { if (o.isBone && o.name === "head") this.headBone = o; });
+    this.bones = Object.create(null);
+    this.model.traverse((o) => {
+      if (!o.isBone) return;
+      this.bones[o.name] = o;
+      if (o.name === "head") this.headBone = o;
+    });
+    // Elle yazilmis durus (bkz. poz / pozGuncelle)
+    this.pozTanim = null;
+    this.pozAgirlik = 0;
+    this.pozHedef = 0;
+    this.pozGir = 0.3;
+    this.pozCik = 0.3;
+    this.pozSure = 0;
     this.bakisHedef = null;   // dunya noktasi
     this.bakisBitis = 0;      // saniye cinsinden kalan sure
     this.bakisGecikme = 0;    // donuse baslamadan once beklenen sure
@@ -428,7 +490,68 @@ export class PieceActor extends THREE.Group {
 
   update(dt) {
     this.mixer.update(dt);
+    this.pozGuncelle(dt);
     this.basiGuncelle(dt);
+  }
+
+  /**
+   * Elle yazilmis bir durusa gec (bkz. POZ). `sure` dolunca poz kendiliginden
+   * cozuluyor; `sure` verilmezse `pozBirak()` cagrilana kadar duruyor.
+   */
+  poz(tanim, { gir = 0.3, sure = 0, cik = 0.3 } = {}) {
+    this.pozTanim = tanim;
+    this.pozGir = Math.max(gir, 1e-3);
+    this.pozCik = Math.max(cik, 1e-3);
+    this.pozSure = sure;
+    this.pozHedef = 1;
+  }
+
+  /** Poz agirligini sifira indirir; klip oldugu gibi devam eder. */
+  pozBirak(cik = 0.3) {
+    this.pozCik = Math.max(cik, 1e-3);
+    this.pozSure = 0;
+    this.pozHedef = 0;
+  }
+
+  /**
+   * Poz agirligini surer ve kemikleri ezer.
+   *
+   * !! Mikserden SONRA cagrilmali: klip her karede kemik donuslerini bastan
+   *    yaziyor. Kemik eksenlerinin Blender'da hangi yone baktigi bilinmiyor,
+   *    o yuzden aci KARAKTERIN ekseninde kuruluyor ve kemigin ebeveyn uzayina
+   *    tasiniyor -- basiGuncelle'deki yontemin uc eksenli hali.
+   */
+  pozGuncelle(dt) {
+    if (!this.pozTanim && this.pozAgirlik <= 0) return;
+
+    if (this.pozHedef > 0 && this.pozSure > 0) {
+      this.pozSure -= dt;
+      if (this.pozSure <= 0) this.pozHedef = 0;
+    }
+    const adim = dt / (this.pozHedef > 0 ? this.pozGir : this.pozCik);
+    this.pozAgirlik = THREE.MathUtils.clamp(
+      this.pozAgirlik + (this.pozHedef > 0 ? adim : -adim), 0, 1
+    );
+    if (this.pozAgirlik <= 0) {
+      this.pozTanim = null;
+      return;
+    }
+
+    // Yumusak giris/cikis: dogrusal agirlik bacagi mekanik kaldiriyor.
+    const w = this.pozAgirlik * this.pozAgirlik * (3 - 2 * this.pozAgirlik);
+    this.getWorldQuaternion(_q3);
+
+    for (const [ad, acilar] of Object.entries(this.pozTanim)) {
+      const kemik = this.bones[kemikAdi(ad)];
+      if (!kemik) continue;
+      kemik.parent.getWorldQuaternion(_q1).invert();
+      for (const [eksen, aci] of Object.entries(acilar)) {
+        if (!aci) continue;
+        // Karakter uzayindaki eksen -> dunya -> kemigin ebeveyn uzayi
+        _v2.copy(POZ_EKSEN[eksen]).applyQuaternion(_q3).applyQuaternion(_q1);
+        kemik.quaternion.premultiply(_q2.setFromAxisAngle(_v2, aci * w));
+      }
+    }
   }
 
   /**
