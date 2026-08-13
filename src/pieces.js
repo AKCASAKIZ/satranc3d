@@ -141,6 +141,40 @@ function isPlinth(object) {
  */
 export const PIECE_TINT = { w: new THREE.Color(0xf2ece0), b: new THREE.Color(0x33302b) };
 
+/**
+ * RUTBE KUSAGI -- tasin hangi tas oldugu kusak renginden okunuyor.
+ *
+ * Sorun (CrazyGames reddinde "genel kalite" olarak geldi, 13-08-2026'da
+ * ekranda olculdu): alti figur de ayni kesis govdesi. Yukseklikleri
+ * piyon 0.99 / at 1.13 / kale 1.15 / fil 1.17 / vezir 1.18 / sah 1.40 --
+ * yani sah disindaki dordu %4 icinde, siluet hicbir sey soylemiyor.
+ * Ayirt eden tek sey silah, ve VARSAYILAN KAMERA TEPEDEN baktigi icin
+ * silahlar kisalip birbirine benzeyen cubuklara doniyor. Tahtaya bakip
+ * sahi vezirden ayirmak mumkun degildi.
+ *
+ * Cozum kaideyi geri acmak DEGIL (o 11-08'de bilerek kapatildi ve tahtayi
+ * yeniden "minyatur asker dizisi"ne cevirirdi). Bunun yerine sette zaten
+ * duran ama kullanilmayan bir kanal var: `Jade_Green` kusak. Uc sebeple
+ * dogru yer:
+ *   1. Govde geometrisinin ~%33'u (olculdu: piyon 1665/5332, sah 2177/6529)
+ *      ve GOVDEDE duruyor -- tepeden bakista tam gorunen yuzey.
+ *   2. Alti tasin ve iki rengin hepsinde ayni malzeme adiyla var.
+ *   3. Tema ona DOKUNMUYOR (tema yalnizca `Marble|Obsidian` teni boyuyor),
+ *      yani rutbe rengi alti temada da sabit kaliyor.
+ *
+ * Tematik olarak da bedava: dovus sanatlarinda kusak zaten rutbe demek.
+ * Renkler maksimum ton ayrimina gore secildi, hem safran hem murekkep
+ * cubbenin uzerinde okunacak sekilde.
+ */
+export const RUTBE_KUSAK = {
+  p: 0xe6e0cf, // beyaz kusak -- en alt rutbe
+  n: 0x2fbf87, // yesim (setin orijinal rengi burada kaliyor)
+  b: 0x49a7f0, // mavi
+  r: 0xa073e8, // mor
+  q: 0xf0414f, // kirmizi
+  k: 0xffc23d, // altin -- sah
+};
+
 /** Sahnede yasayan butun aktorler -- mixer surme ve tema yayma icin. */
 const liveActors = new Set();
 
@@ -374,6 +408,10 @@ export class PieceActor extends THREE.Group {
         //    rengiyle ayiriyor (safran / murekkep); tema yalnizca ten ve
         //    kaideyi boyayinca hem ayrim hem karakter duruyor.
         if (/Marble|Obsidian/.test(m.name)) this.bodyMaterials.push(m);
+        // Rutbe kusagi: taşın kimligi. Tema listesine EKLENMIYOR (bkz.
+        // RUTBE_KUSAK) -- tema teni boyayinca rutbe rengi de kaysaydi
+        // okunabilirlik temaya gore degisirdi.
+        if (/Jade/.test(m.name)) m.color.setHex(RUTBE_KUSAK[type]);
       }
     });
 
