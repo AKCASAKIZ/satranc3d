@@ -17,6 +17,123 @@ import * as THREE from "three";
 
 const KOK_ADI = "cevre";
 
+/* ---------- ORTAM HARITASI (IBL) ----------
+ *
+ * Sahnede uzun sure sadece uc isik vardi: bir yon isigi, bir dolgu, bir de
+ * duz ambient. Duz ambient'in sorunu su: her yuzeyi ayni miktarda
+ * aydinlatiyor, dolayisiyla YON bilgisi tasimiyor. Golgede kalan her yuzey
+ * ayni donuk renge duz oturuyor ve malzemeler "plastik" gorunuyor -- oyunun
+ * ucuz durmasinin ana sebebi buydu.
+ *
+ * Ortam haritasi bunu tek hamlede cozuyor: yukaridan gok, asagidan koyu
+ * zemin geliyor, yani yuzeyin baktigi yon rengini degistiriyor. Bedava
+ * degil ama neredeyse: 64x32'lik bir gradyan yetiyor, cunku PMREM zaten
+ * bulanik hale getiriyor.
+ *
+ * HDR DOSYASI KULLANILMIYOR, bilerek. Bir .hdr indirmek hem 1-2 MB yuk
+ * (oyun su an toplam 7 MB ve CrazyGames yukleme suresine bakiyor) hem de
+ * TEK bir isik atmosferi demek. Burada harita TEMADAN tureiyor: gece
+ * temasinda mavi, kum temasinda sicak. Alti tema, alti ortam, sifir dosya.
+ */
+
+let _renderer = null;
+let _pmrem = null;
+let _ortamRT = null;
+
+/**
+ * Renderer'i kur: golge + tone mapping + PMREM kaydi.
+ *
+ * !! TEK YERDEN. Sahnede UC renderer var -- oyun (main.js), kare dogrulama
+ * (demo.js) ve KLIP KAYDI (record.js). Ucu de ayni ayarlari almazsa klipler
+ * oyundan sapar; projenin kurali kliplerin oyunla birebir ayni gorunmesi
+ * (ses tarafinda ayni sebeple tek voice kodu kullaniliyor). Once bu ayarlar
+ * uc dosyaya elle kopyalanmisti ve tone mapping eklenince yalniz oyun
+ * degismisti: klipler eski duz goruntude kaliyordu.
+ */
+export function renderAyarla(renderer) {
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
+
+  // PMREM uretici renderer'a bagli: renderer degisince eskisi cope.
+  if (_renderer !== renderer) {
+    _pmrem?.dispose();
+    _pmrem = null;
+    _renderer = renderer;
+  }
+}
+
+/* Klip ve demo yolunun ortam renkleri: klasik temanin degerleri.
+   O modlarda tema uygulanmadigi icin elde tema nesnesi yok. */
+export const VARSAYILAN_ORTAM = { bg: 0x151719, zemin: 0x0d0f11 };
+
+/**
+ * Ortam haritasini dogrudan kur. Tema uygulanmayan yollar icin (demo ve
+ * klip kaydi `createUI`'yi hic cagirmiyor, dolayisiyla `applyTheme` de
+ * calismiyor) -- bu cagri olmazsa o modlarda IBL hic devreye girmiyor ve
+ * taslar oyundakinden duz gorunuyor.
+ */
+export function ortamKur(scene, bg, zemin) {
+  ortamUygula(scene, bg, zemin);
+}
+
+/** Iki sRGB hex'i karistir. */
+function karistir(a, b, k) {
+  const kanal = (kaydir) => {
+    const x = (a >> kaydir) & 255;
+    const y = (b >> kaydir) & 255;
+    return Math.round(x + (y - x) * k);
+  };
+  return (kanal(16) << 16) | (kanal(8) << 8) | kanal(0);
+}
+
+const hexYazi = (h) => `#${h.toString(16).padStart(6, "0")}`;
+
+/**
+ * Tema renklerinden dikey gradyan ortam haritasi uretir.
+ *
+ * Gok rengi arka planin ACILMIS hali: ham `bg` kullanilsaydi (ornegin
+ * klasik temada 0x151719) harita neredeyse siyah olurdu ve hicbir isik
+ * katmazdi -- IBL'in anlami kalmazdi. Asagisi `zemin`, yani yerden gelen
+ * yansima koyu; yuzeyin ustu ile alti arasindaki bu fark taslara hacim
+ * veren sey.
+ */
+function ortamHaritasi(bg, zemin) {
+  /* !! EQUIRECT 2:1 OLMALI (genis ve kisa): yatay eksen 360 derece boylam,
+     dikey eksen 180 derece enlem. Ilk denemede 16x64 yazilmisti -- yani
+     oran ters cevrilmisti; harita ekranda olculdu ve hicbir isik katmiyordu
+     (environmentIntensity 8'e cikarilinca bile sahne kilini kipirdatmadi). */
+  const c = document.createElement("canvas");
+  c.width = 64;
+  c.height = 32;
+  const g = c.getContext("2d");
+  const grad = g.createLinearGradient(0, 0, 0, c.height);
+  grad.addColorStop(0.0, hexYazi(karistir(bg, 0xffffff, 0.62))); // gok
+  grad.addColorStop(0.45, hexYazi(karistir(bg, 0xffffff, 0.3))); // ufuk ustu
+  grad.addColorStop(0.55, hexYazi(karistir(bg, 0xffffff, 0.12))); // ufuk
+  grad.addColorStop(1.0, hexYazi(zemin ?? bg)); // yer
+  g.fillStyle = grad;
+  g.fillRect(0, 0, c.width, c.height);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  _pmrem ??= new THREE.PMREMGenerator(_renderer);
+  const rt = _pmrem.fromEquirectangular(tex);
+  tex.dispose();
+  return rt;
+}
+
+/** Temaya gore sahnenin ortam haritasini yenile. Eskisini serbest birakir. */
+function ortamUygula(scene, bg, zemin) {
+  if (!_renderer) return; // demo/kayit yolu renderer kaydetmemis olabilir
+  _ortamRT?.dispose();
+  _ortamRT = ortamHaritasi(bg, zemin);
+  scene.environment = _ortamRT.texture;
+}
+
 /* Rüzgârda salınan çim.
  *
  * "Belli belirsiz" şartı teknik bir kısıt: salınım genliği küçük, hızı
@@ -70,6 +187,21 @@ const CIM_FRAG = /* glsl */ `
     vec3 renk = mix(uDip, uUc, vY);
     float sis = smoothstep(uSisYakin, uSisUzak, vDerinlik);
     gl_FragColor = vec4(mix(renk, uSisRenk, sis), 1.0);
+
+    /* !! BU IKI SATIR SILINMEZ. Cim ozel shader oldugu icin three'nin
+       otomatik ardil islemlerinin DISINDA kaliyor:
+
+       - <tonemapping_fragment> olmazsa: renderer ACESFilmic kullaniyor,
+         yani sahnedeki HER SEY tone mapping'den geciyor ama cim gecmiyor.
+         Cim tek basina ham parlaklikta kalip zeminden one firliyor.
+       - <colorspace_fragment> olmazsa: uniform'lar THREE.Color, ve
+         ColorManagement acik oldugu icin setHex sRGB->Linear cevirip
+         DOGRUSAL deger tutuyor. Shader bunu ciktiya dogrudan yazinca
+         cim olmasi gerekenden koyu ciziliyor -- eski "dagilmis koyu
+         benekler" sorununun asil sebebi buydu; renkler o zaman ekranda
+         telafi edilerek secilmisti. */
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
 
@@ -166,7 +298,11 @@ function siluetHalkasi(tur, renk, sayi = 26, mesafe = 15) {
  * Çevreyi kurar. Öncekini temizleyip yenisini ekler; tema değişimi sırasında
  * birikme olmasın.
  */
-export function applyEnvironment(scene, env, clock) {
+export function applyEnvironment(scene, env, clock, bg = 0x151719) {
+  // Ortam haritasi cevre nesnelerinden BAGIMSIZ: `env` bos olsa da
+  // (klasik tema neredeyse bos) isik yine gelmeli.
+  ortamUygula(scene, bg, env?.zemin);
+
   const eski = scene.getObjectByName(KOK_ADI);
   if (eski) {
     eski.traverse((o) => {

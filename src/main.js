@@ -12,6 +12,9 @@ import { initAudio, play as playSound, sustur, sesiAc, portalSus, sesSeviyesi } 
 import { runFinisher, runQuietMove } from "./finishers.js";
 import { runDemo } from "./demo.js";
 import { AI } from "./ai.js";
+// Oyun yolunda ortam haritasini applyTheme kuruyor; burada yalnizca
+// renderer ayari gerekiyor.
+import { renderAyarla } from "./env.js";
 import {
   portalBaslat, portalVarMi, yuklemeBasladi, yuklemeBitti,
   oyunBasladi, oyunDurdu, keyifAni, reklamIste, sesAyariniIzle,
@@ -22,8 +25,16 @@ const statusEl = document.getElementById("status");
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+/* Tone mapping: sahnenin "ucuz" gorunmesinin en buyuk tek sebebi bunun
+   olmamasiydi. Tone mapping yokken parlak yuzeyler 1.0'da duz kesiliyor --
+   safran cubbenin ustu ve tahtanin acik kareleri tek bir duz renge oturup
+   hacmini kaybediyordu. ACES ustleri yumusakca sikistirdigi icin ayni
+   isikla daha fazla ton ayakta kaliyor.
+
+   Bedeli: her sey ~1 durak koyuluyor, o yuzden isiklar asagida yeniden
+   dengelendi. Ozel shader'lar (cim) bu islemin disinda kaliyor -- env.js'te
+   elle tonemapping chunk'i eklendi, yoksa cim tek basina parlak kaliyor. */
+renderAyarla(renderer);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x151719);
@@ -50,7 +61,17 @@ key.shadow.camera.bottom = -7;
 key.shadow.bias = -0.0008;
 scene.add(key);
 scene.add(new THREE.DirectionalLight(0x88aaff, 0.5).translateX(-6).translateY(4));
-scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+
+/* Ambient 0.45'ten 0.10'a indi: isin buyuk kismini artik ortam haritasi
+   tasiyor (env.js). Duz ambient birakilirsa IBL'in kazandirdigi sey geri
+   silinir -- duz ambient her yuzeyi esit aydinlattigi icin tam olarak
+   ortam haritasinin verdigi yon bilgisini yok ediyor. Sifir da degil:
+   temanin en koyu koselerinde siyaha kilitlenmeyi engelliyor. */
+scene.add(new THREE.AmbientLight(0xffffff, 0.1));
+/* Ortam haritasinin gucu. Tema renklerinden turedigi icin (env.js) her
+   temada dogru tonu getiriyor; buyukluk burada tek yerden ayarlaniyor. */
+scene.environmentIntensity = 1.0;
+
 
 const timeScale = new TimeScale();
 const clock = new Clock(timeScale);

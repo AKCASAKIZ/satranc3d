@@ -5,6 +5,7 @@ import { runFinisher, finisherTiming } from "./finishers.js";
 import { Clock } from "./clock.js";
 import { TimeScale, Shake } from "./fx/impact.js";
 import { renderEventsToWav } from "./fx/audio.js";
+import { renderAyarla, ortamKur, VARSAYILAN_ORTAM } from "./env.js";
 
 /**
  * Klip kayit modu -- oyunun kendi pazarlama icerigini uretmesi buradan geciyor.
@@ -357,8 +358,10 @@ export async function runRecord({ params, scene, settings, assets }) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1);
   renderer.setSize(w, h, false);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Golge + tone mapping oyunla BIREBIR ayni yerden (bkz. env.js).
+  renderAyarla(renderer);
+  // Bu yolda applyTheme calismiyor; IBL'i elle kur, yoksa taslar oyundakinden duz cikar.
+  ortamKur(scene, VARSAYILAN_ORTAM.bg, VARSAYILAN_ORTAM.zemin);
 
   const canvas2d = document.createElement("canvas");
   canvas2d.width = w;

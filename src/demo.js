@@ -4,6 +4,7 @@ import { createPiece, attachActorClock, resetIdlePhase, POZ } from "./pieces.js"
 import { runFinisher } from "./finishers.js";
 import { Clock } from "./clock.js";
 import { TimeScale } from "./fx/impact.js";
+import { renderAyarla, ortamKur, VARSAYILAN_ORTAM } from "./env.js";
 
 /**
  * Kare kare dogrulama modu.
@@ -56,8 +57,10 @@ export async function runDemo({ params, scene, settings, assets }) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1);
   renderer.setSize(TILE_W, TILE_H, false);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Golge + tone mapping oyunla BIREBIR ayni yerden (bkz. env.js).
+  renderAyarla(renderer);
+  // Bu yolda applyTheme calismiyor; IBL'i elle kur, yoksa taslar oyundakinden duz cikar.
+  ortamKur(scene, VARSAYILAN_ORTAM.bg, VARSAYILAN_ORTAM.zemin);
 
   const cam = new THREE.PerspectiveCamera(42, TILE_W / TILE_H, 0.1, 100);
   const look = squareToWorld(TO).clone().setY(0.5);
