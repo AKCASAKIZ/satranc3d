@@ -124,12 +124,27 @@
      zaten kendisi ekliyor. Eklemeye kalkma. -->
 <script>
   /* GoatCounter YALNIZCA kendi sitemizde.
-     CrazyGames'te oyun portalin alan adinda calisiyor; orada ucuncu taraf
-     analitik hem gereksiz (portalin kendi olcumu var) hem de teknik
-     incelemede "dis istek" olarak isaretlenebiliyor.
+
+     !! IZIN LISTESI, DISLAMA LISTESI DEGIL (13-08-2026'da degisti).
+     Once "crazygames.(com|nl) DISINDA her yerde yukle" yaziliydi. Iki hatasi
+     vardi ve ikincisi olculdu:
+       1. Portalin onlarca ulke alan adi var (crazygames.fr, .com.br, .co.id...);
+          kalip onlari kacirIyordu - portal.js ayni dersi belgeliyor.
+       2. Oyun 13-08'de itch.io'ya girdi ve orada `html.itch.zone` iframe'inde
+          calisiyor. Dislama listesi itch'i bilmedigi icin GoatCounter ORADA DA
+          yukleniyordu: itch'te oynayan herkes GitHub Pages ziyaretcisi gibi
+          dusecekti. Tam da olcum icin itch'e gectigimiz gun iki vitrinin
+          sayilari tek panoda karisirdi.
+     Dogru cozum listeyi uzatmak degil, TERSINE CEVIRMEK: yalnizca kendi
+     kanonik alan adimizda (ve gelistirmede localhost'ta) yukle. Boylece
+     yarin baska bir portala girildiginde burayi gunellemek gerekmiyor.
+
      Protokol-goreli "//" yerine acik https: paketten dosya olarak
      acildiginda "//" file: protokolune cozulup istegi olduruyor. */
-  if (!/(^|\.)crazygames\.(com|nl)$/.test(location.hostname)) {
+  var _kendiSitemiz = location.hostname === "akcasakiz.github.io" ||
+                      location.hostname === "localhost" ||
+                      location.hostname === "127.0.0.1";
+  if (_kendiSitemiz) {
     var _gc = document.createElement("script");
     _gc.async = true;
     _gc.src = "https://gc.zgo.at/count.js";
