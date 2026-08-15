@@ -73,6 +73,9 @@
   .panel .seg { display: flex; gap: 5px; margin-bottom: 7px; }
   .panel .seg[hidden] { display: none; }
   .panel .seg button { flex: 1; font-size: 12px; padding: 7px 2px; }
+  /* Bes dugmelik satir (rakip seciminde Usta eklendi) tek satira sigmiyor */
+  .panel .seg5 { flex-wrap: wrap; }
+  .panel .seg5 button { flex: 1 1 28%; }
   .panel .row { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
   .panel .hint { font-size: 11px; color: #767d86; margin-top: 12px; line-height: 1.45; }
 
@@ -143,8 +146,11 @@
   #yukYazi { font-size: 12px; color: #767d86; letter-spacing: .03em; }
 
   /* Menu: zorluk secimi + tek buyuk baslat dugmesi. */
+  /* auto-fit: dugme sayisi degisince (Usta eklendi) satir kendiliginden
+     sariyor. Sabit 4 sutunda besinci dugme kartin disina tasiyordu. */
   #menu .seg {
-    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; margin-bottom: 10px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+    gap: 6px; margin-bottom: 10px;
   }
   #menu .seg button {
     font: inherit; font-size: 12px; padding: 9px 2px; cursor: pointer;
@@ -299,6 +305,7 @@
       <button data-opp="kolay">Easy</button>
       <button data-opp="orta">Medium</button>
       <button data-opp="zor">Hard</button>
+      <button data-opp="usta">Master</button>
       <button data-opp="insan">2P</button>
     </div>
     <button id="menuOyna">PLAY</button>

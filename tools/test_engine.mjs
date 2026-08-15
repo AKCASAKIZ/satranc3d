@@ -118,5 +118,61 @@ for (const [name, cfg] of Object.entries(LEVELS)) {
   ok(diff >= 0, `zor vs kolay ${plies} yari hamle sonunda materyal farki: ${diff > 0 ? "+" : ""}${diff}`);
 }
 
+/* 10) Zorunlu mati gorme.
+   Beklenen sonuc EZBERDEN yazilmiyor: her pozisyonun gercekten zorunlu mat
+   oldugu asagidaki kaba kuvvet cozucuyle burada dogrulaniyor, motordan da
+   mat skoru dondurmesi isteniyor. Ilk denemede suit elle yazilmisti ve
+   FEN'lerin ucu de hataliydi (biri kural disi) -- beklenen cevabi
+   dogrulamayan test, testi degil ezberi olcer. */
+{
+  /** Sira `maximizing` tarafta; `ply` yarim hamlede zorunlu mat var mi? */
+  const matVar = (c, ply, maximizing) => {
+    if (c.isCheckmate()) return !maximizing;
+    if (c.isGameOver() || ply === 0) return false;
+    const moves = c.moves();
+    if (maximizing) {
+      for (const m of moves) {
+        c.move(m);
+        const r = matVar(c, ply - 1, false);
+        c.undo();
+        if (r) return true;
+      }
+      return false;
+    }
+    for (const m of moves) {
+      c.move(m);
+      const r = matVar(c, ply - 1, true);
+      c.undo();
+      if (!r) return false;
+    }
+    return true;
+  };
+
+  const suit = [
+    ["7k/8/5K2/8/8/8/8/6Q1 w - - 0 1", "vezirle mat"],
+    ["7k/8/8/8/8/8/R7/1R5K w - - 0 1", "iki kaleyle merdiven"],
+    ["6k1/5ppp/8/8/8/8/5PPP/1R4K1 w - - 0 1", "arka sira"],
+  ];
+  for (const [fen, ad] of suit) {
+    ok(matVar(new Chess(fen), 3, true), `mat/${ad}: pozisyonda gercekten zorunlu mat var`);
+    const r = engine.search(fen, { timeMs: 800, maxDepth: LEVELS.zor.maxDepth });
+    ok(r.score > 90000, `mat/${ad}: motor mati goruyor (${san(fen, r.move)}, skor ${r.score}, d${r.depth})`);
+  }
+}
+
+/* 11) Derinlik tabani -- "zorlastirdik" iddiasinin olculen karsiligi.
+   16-08-2026'da LMR+PVS oncesi ayni butcelerde: orta d5, zor d6.
+   Bu esikler duserse arama ya da degerlendirme geriye gitmis demektir. */
+{
+  // Olcum ACILIS pozisyonunda yapildi (bkz. 7. testin ciktisi); baska bir
+  // FEN'de dallanma farkli ve esikler anlamini kaybeder.
+  const fen = new Chess().fen();
+  for (const [ad, taban] of [["orta", 6], ["zor", 7]]) {
+    const cfg = LEVELS[ad];
+    const r = engine.search(fen, { timeMs: cfg.timeMs, maxDepth: cfg.maxDepth });
+    ok(r.depth >= taban, `${ad} derinlik tabani: d${r.depth} (>= d${taban})`);
+  }
+}
+
 console.log(fails ? `\n${fails} test basarisiz` : "\nhepsi gecti");
 process.exit(fails ? 1 : 0);

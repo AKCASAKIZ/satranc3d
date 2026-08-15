@@ -102,11 +102,12 @@ export function createUI({ scene, rig, settings, clock, onOpponentChange }) {
 
   panel.innerHTML = `
     <h3>Opponent</h3>
-    <div class="seg" id="opponent">
+    <div class="seg seg5" id="opponent">
       <button data-opp="insan">Human</button>
       <button data-opp="kolay">Easy</button>
       <button data-opp="orta">Medium</button>
       <button data-opp="zor">Hard</button>
+      <button data-opp="usta">Master</button>
     </div>
     <div class="seg" id="side">
       <button data-side="w">Play White</button>
