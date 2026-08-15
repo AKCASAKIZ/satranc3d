@@ -13,6 +13,7 @@ import { runFinisher, runQuietMove } from "./finishers.js";
 import { runDemo } from "./demo.js";
 import { AI } from "./ai.js";
 import { Saat, TEMPOLAR, bicimle } from "./timer.js";
+import { createIz } from "./iz.js";
 // Oyun yolunda ortam haritasini applyTheme kuruyor; burada yalnizca
 // renderer ayari gerekiyor.
 import { renderAyarla } from "./env.js";
@@ -84,6 +85,11 @@ rig.shake = new Shake();
 const settings = loadSettings();
 
 scene.add(createBoard());
+/* Tahtanin yipranmasi: taslarin gectigi hatlar ve yeme kareleri parti
+   boyunca birikiyor (bkz. iz.js). Tahtadan hemen sonra, vurgulardan once
+   ekleniyor -- yukseklik sirasi kare(0) < iz(0.006) < vurgu(0.011). */
+const iz = createIz();
+scene.add(iz.mesh);
 const highlights = createHighlights();
 scene.add(highlights.group);
 
@@ -286,6 +292,7 @@ function menuyeDon() {
   selected = null;
   highlights.clear();
   saat.duraklat();
+  iz.sifirla();
   refresh();
   menuyuGoster();
 }
@@ -434,6 +441,19 @@ if (import.meta.env?.DEV) {
     asama: document.body.dataset.asama,
     bitti: game.isOver,
   });
+  /** Tahta yipranmasini hizlica biriktir: 40 hamlelik parti beklemeden bakmak icin. */
+  window.__izTest = (n = 30) => {
+    const kareler = [];
+    for (const f of "abcdefgh") for (let r = 1; r <= 8; r++) kareler.push(f + r);
+    const sec = () => kareler[Math.floor(Math.random() * kareler.length)];
+    for (let i = 0; i < n; i++) {
+      iz.yuruyus(sec(), sec(), { agirlik: 0.7 + Math.random() * 0.6 });
+      if (i % 3 === 0) iz.oldurus(sec(), { guc: 0.8 + Math.random() * 0.5 });
+      if (i % 7 === 0) iz.catlak(sec(), { guc: 1.1 });
+    }
+    return iz.hamle;
+  };
+
   /** Kalan sureyi elle kur: bayrak dusmesini 3 dakika beklemeden denemek icin. */
   window.__saatAyarla = (renk, sn) => {
     saat.kalan[renk] = sn;
@@ -537,6 +557,7 @@ async function yeniOyun() {
     game.reset();
     selected = null;
     highlights.clear();
+    iz.sifirla();
     refresh();
     oyunBasladi();
     // Rovans ayni tempoyla; saat sifirdan baslar
@@ -620,6 +641,20 @@ async function playMove(from, to, forced) {
     // hatali dokunusla kendine sonsuz sure kazandirir
     saat.basla(game.turn);
     return;
+  }
+
+  /* Tahtaya iz birak. Hamle OYNANDIKTAN sonra ama animasyondan once:
+     tas yururken izin altinda olusmasi gerekiyor, sonradan eklenirse iz
+     tas gectikten sonra beliriyor ve "boyandi" gibi duruyor. */
+  const agirlik = { p: 0.7, n: 0.95, b: 0.9, r: 1.15, q: 1.1, k: 1.3 }[result.piece] ?? 1;
+  iz.yuruyus(result.from, result.to, { agirlik });
+  if (result.capturedSquare) {
+    iz.oldurus(result.capturedSquare, { guc: agirlik });
+    // Catlak yalnizca AGIR tasin oldurusunde: her yemede catlarsa tahta
+    // bes hamlede kirik dokuye donuyor, iz birikiminin anlami kaliyor.
+    if (result.piece === "r" || result.piece === "q" || result.piece === "k") {
+      iz.catlak(result.capturedSquare, { guc: agirlik });
+    }
   }
 
   if (result.capturedSquare) {
