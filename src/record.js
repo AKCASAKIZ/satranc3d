@@ -340,7 +340,10 @@ async function recordOne({ spec, scene, assets, settings, renderer, canvas2d, op
 }
 
 export async function runRecord({ params, scene, settings, assets }) {
-  for (const id of ["hud", "ui", "scene", "flash"]) {
+  /* !! YENI PERDE EKLENIRSE BU LISTEYE DE EKLE. Yukleme perdesi ve menu
+     tam ekran ve z-index 30 -- listede olmazlarsa klip/demo ciktisinin
+     ustunde durup butun kareleri kapatirlar. */
+  for (const id of ["hud", "ui", "scene", "yukleme", "menu", "flash"]) {
     const el = document.getElementById(id);
     if (el) el.style.display = "none";
   }

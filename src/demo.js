@@ -35,7 +35,10 @@ const FROM = "d4";
 const TO = "d5";
 
 export async function runDemo({ params, scene, settings, assets }) {
-  for (const id of ["hud", "ui", "scene"]) {
+  /* !! YENI PERDE EKLENIRSE BU LISTEYE DE EKLE. Yukleme perdesi ve menu
+     tam ekran ve z-index 30 -- listede olmazlarsa klip/demo ciktisinin
+     ustunde durup butun kareleri kapatirlar. */
+  for (const id of ["hud", "ui", "scene", "yukleme", "menu"]) {
     const el = document.getElementById(id);
     if (el) el.style.display = "none";
   }

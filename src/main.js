@@ -118,6 +118,83 @@ function olay(ad) {
   } catch { /* olcum oyunu asla bozmasin */ }
 }
 
+/* ---------- yukleme perdesi ve ana menu ---------- *
+ *
+ *  Oyun eskiden dogrudan tahtaya duyuyordu: ilk ekran, 7 MB inerken HUD'un
+ *  kosesinde duran kucuk bir yaziydi. CrazyGames'in "genel kalite"
+ *  gerekcesinin gorunen yuzu buydu -- hakemin gordugu ilk sey.
+ *
+ *  Simdi uc asama var: yukleme -> menu -> oyun. Asama `body[data-asama]`
+ *  uzerinde duruyor, HUD ve kumandalari CSS gizliyor.
+ */
+
+function yuklemeIlerlet(done, total) {
+  const yuzde = Math.round((done / total) * 100);
+  const dolgu = document.getElementById("yukDolgu");
+  if (dolgu) dolgu.style.width = yuzde + "%";
+  const yazi = document.getElementById("yukYazi");
+  // Yuzde YAZIYLA da veriliyor: cubuk tek basina "takildi mi" sorusunu
+  // cevaplamiyor ve 7 MB'lik indirmede oyuncu tam olarak bunu soruyor.
+  if (yazi) yazi.textContent = `Loading warriors… ${yuzde}%`;
+}
+
+function yuklemeHatasi(err) {
+  const yazi = document.getElementById("yukYazi");
+  // Hata perdede gosterilmeli: HUD bu asamada gizli, oraya yazilirsa
+  // oyuncu bos bir yukleme cubuguna bakip kaliyor.
+  if (yazi) yazi.textContent = "Loading failed — " + err.message;
+  statusEl.textContent = "Loading failed: " + err.message;
+}
+
+function perdeyiKapat() {
+  const perde = document.getElementById("yukleme");
+  if (!perde) return;
+  perde.classList.add("gidiyor");
+  setTimeout(() => perde.remove(), 500);
+}
+
+function menuIsaretle() {
+  for (const b of document.querySelectorAll("#menuRakip [data-opp]")) {
+    b.classList.toggle("active", b.dataset.opp === settings.opponent);
+  }
+}
+
+function menuyuGoster() {
+  document.body.dataset.asama = "menu";
+  document.getElementById("menu").hidden = false;
+  menuIsaretle();
+  // Menude tahta bir vitrin: yavas donuyor ve yakin sinematik acidan
+  // bakiliyor. Oyuncu daha PLAY'e basmadan oyunun ne oldugunu goruyor.
+  rig.preset("sinematik");
+  rig.setSpin(0.16);
+}
+
+function oyunaBasla() {
+  document.getElementById("menu").hidden = true;
+  document.body.dataset.asama = "oyun";
+  rig.setSpin(0);
+  // Dugmeye basmak GECERLI kullanici hareketi: AudioContext tam burada
+  // acilabiliyor, oyuncu ilk hamlesini yapmadan ses hazir oluyor.
+  initAudio();
+  rig.preset(aiPlays() && settings.playerColor === "b" ? "siyah" : "beyaz");
+  oyunBasladi();
+  maybeAiMove();
+}
+
+function menuyeDon() {
+  const el = document.getElementById("son");
+  if (el) el.hidden = true;
+  // Portal "oynanis durdu" haberini almali, yoksa menude beklerken
+  // oyuncunun dusundugunu sanip reklam gosterebiliyor.
+  oyunDurdu();
+  generation++;
+  game.reset();
+  selected = null;
+  highlights.clear();
+  refresh();
+  menuyuGoster();
+}
+
 function refresh() {
   pieces.sync(game.board);
   const s = game.status();
@@ -573,9 +650,7 @@ async function boot() {
     // Yol VERILMIYOR: pieces.js varsayilani `<BASE_URL>glb` uretiyor. Burada
     // mutlak "/glb" yaziliydi ve alt dizinden servis edilince (GitHub Pages
     // proje sitesi) 12 GLB'nin hepsi 404 veriyordu - olculdu 10-08-2026.
-    const assets = await loadWarriors(undefined, (done, total) => {
-      statusEl.textContent = `Loading warriors ${done}/${total}`;
-    });
+    const assets = await loadWarriors(undefined, yuklemeIlerlet);
 
     // Kare kare dogrulama modu -- normal oyunu hic kurmadan tek kare uretir
     const params = new URLSearchParams(location.search);
@@ -633,12 +708,25 @@ async function boot() {
       rig.preset(aiPlays() && settings.playerColor === "b" ? "siyah" : "beyaz");
       yeniOyun();
     });
+    document.getElementById("sonMenu").addEventListener("click", menuyeDon);
+    document.getElementById("menuOyna").addEventListener("click", oyunaBasla);
+    document.getElementById("menuRakip").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-opp]");
+      if (!b) return;
+      settings.opponent = b.dataset.opp;
+      saveSettings(settings);
+      menuIsaretle();
+    });
+
     yuklemeBitti();
-    oyunBasladi();
+    // Oyun BURADA baslamiyor: portal `gameplayStart`i gercek oynanisin
+    // isareti sayiyor ve reklam zamanlamasini ona gore yapiyor. Menude
+    // beklerken "oynuyor" demek portali yaniltir.
+    perdeyiKapat();
+    menuyuGoster();
     loop();
-    maybeAiMove();
   } catch (err) {
-    statusEl.textContent = "Loading failed: " + err.message;
+    yuklemeHatasi(err);
     console.error(err);
   }
 }

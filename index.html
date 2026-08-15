@@ -98,6 +98,79 @@
     .swatch .chip { height: 13px; }
     .panel .hint { margin-top: 8px; }
   }
+  /* --- yukleme perdesi ve ana menu --- *
+     Ikisi ayni gorsel dil: ortada kart, ustte oyunun adi. Oyuncu yukleme
+     ekranindan menuye gecerken baslik YERINDEN OYNAMIYOR, sadece altindaki
+     icerik degisiyor -- iki ayri ekran gibi degil, tek ekranin iki hali
+     gibi duruyor.
+
+     Yukleme perdesi index.html'de DURUYOR, JS uretmiyor: 742 KB'lik paket
+     ayristirilana kadar gecen surede de ekranda bir sey olmali. JS uretseydi
+     ilk saniyeler bos siyah ekran olurdu - portalin "kalite" olcutunun tam
+     olarak baktigi yer. */
+  #yukleme, #menu {
+    position: fixed; inset: 0; z-index: 30; display: grid; place-items: center;
+    background: radial-gradient(ellipse at 50% 38%, #1e2226 0%, #101214 62%, #0a0b0d 100%);
+    padding: 24px;
+  }
+  #menu { background: rgba(10, 11, 13, .78); backdrop-filter: blur(7px); }
+  #yukleme[hidden], #menu[hidden] { display: none; }
+  /* Yukleme perdesi kaybolurken sahne arkasindan aciliyor */
+  #yukleme.gidiyor { opacity: 0; transition: opacity .45s ease; pointer-events: none; }
+
+  .perde-kart { width: min(400px, 100%); text-align: center; }
+  .perde-kart h1 {
+    font-size: clamp(23px, 5.4vw, 34px); font-weight: 700; letter-spacing: .055em;
+    line-height: 1.15; margin-bottom: 9px;
+    background: linear-gradient(180deg, #f6ead4 0%, #e0a44e 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .perde-kart .slogan {
+    font-size: 13px; color: #8b929b; letter-spacing: .02em; margin-bottom: 26px;
+  }
+
+  /* Yukleme cubugu. Yuzde YAZIYLA da veriliyor: cubuk tek basina "takildi mi,
+     yavas mi" sorusunu cevaplamiyor, 7 MB'lik indirmede oyuncu bunu soruyor. */
+  .bar {
+    height: 5px; border-radius: 3px; background: #24282d; overflow: hidden;
+    margin-bottom: 11px;
+  }
+  .bar i {
+    display: block; height: 100%; width: 0%; border-radius: 3px;
+    background: linear-gradient(90deg, #b7671d, #ffc23d);
+    transition: width .25s ease;
+  }
+  #yukYazi { font-size: 12px; color: #767d86; letter-spacing: .03em; }
+
+  /* Menu: zorluk secimi + tek buyuk baslat dugmesi. */
+  #menu .seg {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; margin-bottom: 10px;
+  }
+  #menu .seg button {
+    font: inherit; font-size: 12px; padding: 9px 2px; cursor: pointer;
+    color: #c2c7ce; background: rgba(30, 34, 39, .9);
+    border: 1px solid #41464c; border-radius: 8px;
+  }
+  #menu .seg button:hover { background: #3a4047; }
+  #menu .seg button.active { background: #2f6d8a; border-color: #7fd4ff; color: #fff; }
+  #menu .etiket {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .09em;
+    color: #8b929b; margin-bottom: 8px; text-align: left;
+  }
+  #menuOyna {
+    font: inherit; font-size: 15px; font-weight: 600; letter-spacing: .06em;
+    width: 100%; margin-top: 16px; padding: 14px; cursor: pointer; color: #1a1206;
+    background: linear-gradient(180deg, #ffc855, #dd8f23);
+    border: 1px solid #ffd680; border-radius: 10px;
+  }
+  #menuOyna:hover { background: linear-gradient(180deg, #ffd478, #e89b2c); }
+  .menu-ipucu { font-size: 11px; color: #767d86; margin-top: 14px; line-height: 1.45; }
+
+  /* Oyun basvermeden HUD ve kumandalar durmasin: menude tahta bir "vitrin",
+     ustunde dugme olmasi o hissi bozuyor. */
+  body[data-asama="yukleme"] #hud, body[data-asama="yukleme"] #ui,
+  body[data-asama="menu"] #hud, body[data-asama="menu"] #ui { display: none; }
+
   #promo[hidden] { display: none; }
   #promo {
     position: fixed; inset: 0; display: grid; place-items: center;
@@ -133,7 +206,8 @@
   }
   #son h2 { font-size: 19px; font-weight: 600; margin-bottom: 4px; }
   #son .alt { font-size: 13px; color: #8b929b; margin-bottom: 16px; }
-  #son .row { display: flex; gap: 8px; justify-content: center; }
+  /* Uc dugme dar telefonda tek sataya sigmiyor -- sarmasi serbest. */
+  #son .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
   #son button {
     font: inherit; font-size: 13px; color: #e8e4dc; cursor: pointer;
     background: #2a2e33; border: 1px solid #41464c; border-radius: 8px; padding: 10px 16px;
@@ -170,6 +244,11 @@
 
      Protokol-goreli "//" yerine acik https: paketten dosya olarak
      acildiginda "//" file: protokolune cozulup istegi olduruyor. */
+  /* Asama: yukleme -> menu -> oyun. HUD ve kumandalar CSS'te buna gore
+     gizleniyor. Paket yuklenmeden once yazilmasi sart, yoksa ilk karede
+     HUD bir an gorunuyor. */
+  document.body.dataset.asama = "yukleme";
+
   var _kendiSitemiz = location.hostname === "akcasakiz.github.io" ||
                       location.hostname === "localhost" ||
                       location.hostname === "127.0.0.1";
@@ -199,6 +278,34 @@
 </script>
 
 <canvas id="scene"></canvas>
+
+<!-- Yukleme perdesi: JS'ten ONCE, dogrudan belgede. Paket ayristirilana ve
+     12 GLB (~7 MB) inene kadar ekranda duran tek sey bu. -->
+<div id="yukleme">
+  <div class="perde-kart">
+    <h1>KUNG-FU CHESS 3D</h1>
+    <p class="slogan">Every capture is a Shaolin duel</p>
+    <div class="bar"><i id="yukDolgu"></i></div>
+    <p id="yukYazi">Loading…</p>
+  </div>
+</div>
+
+<div id="menu" hidden>
+  <div class="perde-kart">
+    <h1>KUNG-FU CHESS 3D</h1>
+    <p class="slogan">Every capture is a Shaolin duel</p>
+    <p class="etiket">Opponent</p>
+    <div class="seg" id="menuRakip">
+      <button data-opp="kolay">Easy</button>
+      <button data-opp="orta">Medium</button>
+      <button data-opp="zor">Hard</button>
+      <button data-opp="insan">2P</button>
+    </div>
+    <button id="menuOyna">PLAY</button>
+    <p class="menu-ipucu">Drag the board to look around · pinch or scroll to zoom.</p>
+  </div>
+</div>
+
 <div id="hud">
   <span id="status">Loading…</span>
   <button id="reset">New game</button>
@@ -214,6 +321,7 @@
     <div class="row">
       <button id="sonRovans" class="primary">Rematch</button>
       <button id="sonTaraf">Switch sides</button>
+      <button id="sonMenu">Menu</button>
     </div>
   </div>
 </div>
