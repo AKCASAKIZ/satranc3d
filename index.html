@@ -35,6 +35,34 @@
   #reset:hover { background: #343940; }
   #flash { position: fixed; inset: 0; pointer-events: none; z-index: 20; background: rgba(255,235,200,0); }
 
+  /* --- satranc saati --- */
+  #saat {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; z-index: 12;
+  }
+  #saat[hidden] { display: none; }
+  #saat .kutu {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    min-width: 74px; padding: 6px 10px; border-radius: 9px;
+    background: rgba(20,22,25,.78); border: 1px solid #34383d; backdrop-filter: blur(8px);
+    /* Sayi degisirken kutu genisligi oynamasin: rakamlar esit genislikte */
+    font-variant-numeric: tabular-nums;
+  }
+  #saat .ad { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: #7d848d; }
+  #saat .sure { font-size: 18px; font-weight: 600; line-height: 1.1; color: #cfd4da; }
+  /* Sirasi gelen taraf: kenarlik ve renk. Yalniz renk degisimi yetmiyor,
+     ekranin ustunde iki kucuk kutu ve oyuncu tahtaya bakiyor. */
+  #saat .kutu.aktif { border-color: #7fd4ff; background: rgba(31,58,72,.85); }
+  #saat .kutu.aktif .sure { color: #fff; }
+  #saat .kutu.az .sure { color: #ff8a6b; }
+  #saat .kutu.bitti .sure { color: #ff5b45; }
+  body[data-asama="yukleme"] #saat, body[data-asama="menu"] #saat { display: none; }
+  @media (max-width: 520px) {
+    /* Telefonda HUD sol ustte, saat ortada: ikisi carpismasin diye kucult */
+    #saat .kutu { min-width: 60px; padding: 4px 8px; }
+    #saat .sure { font-size: 15px; }
+  }
+
   /* --- ayarlar / dondurme aparati --- */
   #ui button { font: inherit; color: #e8e4dc; cursor: pointer;
     background: rgba(30,34,39,.9); border: 1px solid #41464c; border-radius: 8px; }
@@ -308,6 +336,8 @@
       <button data-opp="usta">Master</button>
       <button data-opp="insan">2P</button>
     </div>
+    <p class="etiket">Time control</p>
+    <div class="seg" id="menuSure"></div>
     <button id="menuOyna">PLAY</button>
     <p class="menu-ipucu">Drag the board to look around · pinch or scroll to zoom.</p>
   </div>
@@ -317,6 +347,14 @@
   <span id="status">Loading…</span>
   <button id="reset">New game</button>
   <button id="ipucu">Hint</button>
+</div>
+
+<!-- Satranc saati. HUD'un icinde DEGIL: iki saat yan yana HUD'u telefonda
+     ekran disina tasiriyordu, ayrica saatin oyuncunun bakis alaninda
+     durmasi gerekiyor -- ust ortada. -->
+<div id="saat" hidden>
+  <div class="kutu" data-renk="b"><span class="ad">Black</span><span class="sure" id="saatB">0:00</span></div>
+  <div class="kutu" data-renk="w"><span class="ad">White</span><span class="sure" id="saatW">0:00</span></div>
 </div>
 <div id="flash"></div>
 <div id="ui"></div>

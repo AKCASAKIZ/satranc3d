@@ -5,11 +5,15 @@ import { Engine, levelWithBias, pickMove, toPublicMove } from "./engine.js";
 const engine = new Engine();
 
 self.onmessage = (e) => {
-  const { id, fen, level, bias } = e.data;
+  const { id, fen, level, bias, maxMs = Infinity } = e.data;
   const cfg = levelWithBias(level, bias);
 
   try {
-    const result = engine.search(fen, { timeMs: cfg.timeMs, maxDepth: cfg.maxDepth });
+    // maxMs: saatin verdigi tavan (bkz. timer.js butce)
+    const result = engine.search(fen, {
+      timeMs: Math.min(cfg.timeMs, maxMs),
+      maxDepth: cfg.maxDepth,
+    });
     self.postMessage({
       id,
       move: toPublicMove(pickMove(result, cfg.slack)),

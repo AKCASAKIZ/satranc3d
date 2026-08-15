@@ -12,6 +12,7 @@ import { initAudio, play as playSound, sustur, sesiAc, portalSus, sesSeviyesi } 
 import { runFinisher, runQuietMove } from "./finishers.js";
 import { runDemo } from "./demo.js";
 import { AI } from "./ai.js";
+import { Saat, TEMPOLAR, bicimle } from "./timer.js";
 // Oyun yolunda ortam haritasini applyTheme kuruyor; burada yalnizca
 // renderer ayari gerekiyor.
 import { renderAyarla } from "./env.js";
@@ -100,6 +101,76 @@ const pointer = new THREE.Vector2();
 const aiPlays = () => settings.opponent !== "insan";
 const humanTurn = () => !aiPlays() || game.turn === settings.playerColor;
 
+/* ---------- satranc saati ---------- *
+ *
+ *  Tempo menude seciliyor ve PARTI BASINDA sabitleniyor: `saat` nesnesi
+ *  oyun basladiginda kuruluyor, ortasinda tempo degistirilemiyor.
+ *  Saatin ne zaman DURDUGU timer.js'te anlatiliyor -- ozeti: oldurus
+ *  animasyonlari dusunme suresi degil.
+ */
+let saat = new Saat("yok");
+
+function saatKur() {
+  saat = new Saat(settings.tempo);
+  const el = document.getElementById("saat");
+  if (el) el.hidden = !saat.acik;
+  saatCiz();
+}
+
+function saatCiz() {
+  if (!saat.acik) return;
+  for (const renk of ["w", "b"]) {
+    const kutu = document.querySelector(`#saat .kutu[data-renk="${renk}"]`);
+    if (!kutu) continue;
+    const sure = saat.kalan[renk];
+    kutu.querySelector(".sure").textContent = bicimle(sure);
+    kutu.classList.toggle("aktif", saat.aktif === renk);
+    kutu.classList.toggle("az", sure > 0 && sure < 30);
+    kutu.classList.toggle("bitti", saat.dusen === renk);
+  }
+}
+
+/**
+ * Parti gercekten bitti mi.
+ *
+ * `game.isOver` YETMIYOR: sure bitiminde tahtada hala yasal hamle var,
+ * chess.js acisindan oyun surüyor. Bu kontrol olmadan bayrak dustukten
+ * sonra tas oynatilabiliyordu -- ekranda goruldu.
+ */
+const partiBitti = () => game.isOver || !!saat.dusen;
+
+/** Suresi biten taraf kaybeder. Yeterli materyali olmayan rakipte beraberlik
+ *  (FIDE kurali); chess.js bunu bilmiyor, elle bakiliyor. */
+function sureBitti(dusen) {
+  const kazanan = dusen === "w" ? "b" : "w";
+  const yeterli = materyalYeterliMi(kazanan);
+  const s = yeterli
+    ? {
+        over: true,
+        winner: kazanan,
+        sure: true, // mat sahnesi oynamasin: bkz. sonPerdeAc
+        text: (kazanan === "w" ? "White" : "Black") + " wins on time",
+      }
+    : { over: true, winner: null, sure: true, text: "Time out — draw (insufficient material)" };
+  statusEl.textContent = s.text;
+  statusEl.classList.add("over");
+  saatCiz();
+  sonPerdeAc(s);
+}
+
+/** Tek basina mat edebilir mi: piyon/kale/vezir ya da iki hafif tas. */
+function materyalYeterliMi(renk) {
+  let hafif = 0;
+  for (const row of game.board) {
+    for (const sq of row) {
+      if (!sq || sq.color !== renk) continue;
+      if (sq.type === "p" || sq.type === "r" || sq.type === "q") return true;
+      if (sq.type === "n" || sq.type === "b") hafif++;
+    }
+  }
+  return hafif >= 2;
+}
+
 /* ---------- olcum ---------- *
  *
  *  Sayfa goruntulemesi tek basina bir sey soylemiyor: gelenlerin cogu bakip
@@ -157,6 +228,25 @@ function menuIsaretle() {
   for (const b of document.querySelectorAll("#menuRakip [data-opp]")) {
     b.classList.toggle("active", b.dataset.opp === settings.opponent);
   }
+  for (const b of document.querySelectorAll("#menuSure [data-tempo]")) {
+    b.classList.toggle("active", b.dataset.tempo === settings.tempo);
+  }
+}
+
+/** Tempo dugmeleri TEMPOLAR'dan uretiliyor: liste tek yerde dursun. */
+function menuSureKur() {
+  const el = document.getElementById("menuSure");
+  if (!el) return;
+  el.innerHTML = Object.entries(TEMPOLAR)
+    .map(([key, t]) => `<button data-tempo="${key}">${t.label}</button>`)
+    .join("");
+  el.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-tempo]");
+    if (!b) return;
+    settings.tempo = b.dataset.tempo;
+    saveSettings(settings);
+    menuIsaretle();
+  });
 }
 
 function menuyuGoster() {
@@ -178,6 +268,10 @@ function oyunaBasla() {
   initAudio();
   rig.preset(aiPlays() && settings.playerColor === "b" ? "siyah" : "beyaz");
   oyunBasladi();
+  // Tempo parti basinda sabitleniyor; oyun ortasinda degistirilemiyor
+  saatKur();
+  saat.basla(game.turn);
+  saatCiz();
   maybeAiMove();
 }
 
@@ -191,6 +285,7 @@ function menuyeDon() {
   game.reset();
   selected = null;
   highlights.clear();
+  saat.duraklat();
   refresh();
   menuyuGoster();
 }
@@ -328,6 +423,23 @@ if (import.meta.env?.DEV) {
     for (let i = 0; i < kere; i++) clock.tick(dt);
     renderer.render(scene, camera);
   };
+  // Saat neden islemiyor sorusunun tek bakista cevabi: dort kosuldan
+  // hangisinin tuttugunu disaridan gormenin baska yolu yok (modul kapsami).
+  window.__saatTani = () => ({
+    acik: saat.acik,
+    aktif: saat.aktif,
+    kalan: { ...saat.kalan },
+    dusen: saat.dusen,
+    busy,
+    asama: document.body.dataset.asama,
+    bitti: game.isOver,
+  });
+  /** Kalan sureyi elle kur: bayrak dusmesini 3 dakika beklemeden denemek icin. */
+  window.__saatAyarla = (renk, sn) => {
+    saat.kalan[renk] = sn;
+    saatCiz();
+    return { ...saat.kalan };
+  };
   window.__tani = () => {
     const c = pieces?.group?.children ?? [];
     const sah = c.find((a) => a.userData?.type === "k" && a.userData?.color === "b");
@@ -355,8 +467,11 @@ function sonPerdeAc(s) {
   document.getElementById("sonBaslik").textContent = s.text;
   document.getElementById("sonAlt").textContent =
     sonuc === "win" ? "Well played." : sonuc === "loss" ? "Care for another?" : "";
-  // Mat varsa perde sahnenin ARDINDAN gelsin; beraberlikte kisa bekleme yeter
-  const bekle = s.winner ? matSahnesi(s.winner) * 1000 + 400 : 900;
+  /* Mat varsa perde sahnenin ARDINDAN gelsin; beraberlikte kisa bekleme yeter.
+     !! Sure bitiminde mat sahnesi OYNAMAZ: o sahne kaybedenin sahini isikla
+     yukari aliyor, yani ekranda "mat oldun" diyor. Bayrak dustugunde
+     tahtada mat yok -- oyunun kendisi hakkinda yanlis sey gosterirdi. */
+  const bekle = s.winner && !s.sure ? matSahnesi(s.winner) * 1000 + 400 : 900;
   setTimeout(() => { el.hidden = false; }, bekle);
 }
 
@@ -381,7 +496,7 @@ function sonPerdeAc(s) {
  */
 let ipucuSuruyor = false;
 async function ipucuVer() {
-  if (ipucuSuruyor || busy || game.isOver || !humanTurn()) return;
+  if (ipucuSuruyor || busy || partiBitti() || !humanTurn()) return;
   ipucuSuruyor = true;
   const dugme = document.getElementById("ipucu");
   dugme.disabled = true;
@@ -424,6 +539,10 @@ async function yeniOyun() {
     highlights.clear();
     refresh();
     oyunBasladi();
+    // Rovans ayni tempoyla; saat sifirdan baslar
+    saatKur();
+    saat.basla(game.turn);
+    saatCiz();
     maybeAiMove();
   } finally {
     rovansSuruyor = false;
@@ -432,7 +551,7 @@ async function yeniOyun() {
 
 /** Sira motordaysa dusundurup hamlesini oynatir. */
 async function maybeAiMove() {
-  if (busy || game.isOver || humanTurn()) return;
+  if (busy || partiBitti() || humanTurn()) return;
 
   const mine = generation;
   busy = true;
@@ -442,7 +561,9 @@ async function maybeAiMove() {
 
   let answer;
   try {
-    answer = await ai.think(game.fen, settings.opponent, etkinBias());
+    // Motor kendi saatine uymali: 3 dakikalik partide her hamleye 4,5 sn
+    // harcayan "Usta" 40. hamleyi goremeden bayragi dusurur.
+    answer = await ai.think(game.fen, settings.opponent, etkinBias(), saat.butce(game.turn));
   } catch (err) {
     console.error(err);
     statusEl.textContent = "Engine error: " + err.message;
@@ -485,12 +606,19 @@ async function playMove(from, to, forced) {
   busy = true;
   highlights.clear();
   selected = null;
+  // Animasyon ve terfi penceresi dusunme suresi degil -- saat duruyor
+  saat.duraklat();
+  saatCiz();
 
+  const oynayan = game.turn;
   const promotion = !forced && game.needsPromotion(from, to) ? await askPromotion() : forced || "q";
   const attacker = pieces.at(from);
   const result = game.move(from, to, promotion);
   if (!result) {
     busy = false;
+    // Hamle gecersizse saat oldugu yerden devam etmeli, yoksa oyuncu
+    // hatali dokunusla kendine sonsuz sure kazandirir
+    saat.basla(game.turn);
     return;
   }
 
@@ -528,6 +656,10 @@ async function playMove(from, to, forced) {
 
   refresh();
   busy = false;
+  // Artis hamleyi yapana eklenir; oyun bittiyse saat hic yeniden baslamaz
+  if (!game.isOver) saat.hamleBitti(oynayan, game.turn);
+  else saat.duraklat();
+  saatCiz();
   maybeAiMove();
 }
 
@@ -570,7 +702,7 @@ function onPointerUp(event) {
 function onPointerCancel() { basim = null; }
 
 function secimYap(event) {
-  if (busy || !humanTurn()) return;
+  if (busy || partiBitti() || !humanTurn()) return;
   const rect = canvas.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -629,6 +761,16 @@ function loop() {
   lastFrame = now;
 
   resize();
+
+  /* Satranc saati OLCEKLENMEMIS dt ile ilerliyor (dt, `scaled` degil):
+     yavas cekim oyunun saatini yavaslatmamali. Ayrica yalniz oyun
+     asamasinda ve animasyon yokken -- bkz. timer.js. */
+  if (saat.acik && document.body.dataset.asama === "oyun" && !busy && !partiBitti()) {
+    const dusen = saat.tick(dt);
+    saatCiz();
+    if (dusen) sureBitti(dusen);
+  }
+
   // clock.tick hem kayitli animasyonlari surer hem olceklenmis dt doner;
   // hit-stop boylece kamerayi da animasyonlari da ayni anda donduruyor.
   const scaled = clock.tick(dt);
@@ -709,6 +851,7 @@ async function boot() {
       yeniOyun();
     });
     document.getElementById("sonMenu").addEventListener("click", menuyeDon);
+    menuSureKur();
     document.getElementById("menuOyna").addEventListener("click", oyunaBasla);
     document.getElementById("menuRakip").addEventListener("click", (e) => {
       const b = e.target.closest("[data-opp]");

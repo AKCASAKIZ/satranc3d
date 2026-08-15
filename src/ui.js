@@ -11,6 +11,10 @@ const DEFAULTS = {
   playerColor: "w",
   // Yeme sahnesinin uzunlugu: tam dovus guzel ama her hamlede 4 sn suruyor
   duel: "kisa",
+  // Satranc saati tempolari: timer.js TEMPOLAR. Varsayilan KAPALI --
+  // saat, isteyenin actigi bir kisitlama olmali; oyunu ilk kez acan
+  // birine dayatilirsa oynanis degil sinav olur.
+  tempo: "yok",
   // --- sessiz zorluk uyarlamasi ---
   // seri: +n ust uste galibiyet, -n ust uste yenilgi. bias: motora giden
   // yumusatma (-2..+2). Oyuncuya HIC gosterilmiyor; "zorluk dusuruldu" yazisi

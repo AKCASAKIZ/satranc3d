@@ -34,26 +34,33 @@ export class AI {
     }
   }
 
-  /** @returns {Promise<{ move: {from,to,promotion,san}|null, score, depth, nodes }>} */
-  async think(fen, level, bias = 0) {
+  /**
+   * @param {number} [maxMs] saatten gelen tavan; seviyenin butcesi bunu
+   *   asamaz. Saat kapaliyken Infinity gelir ve hicbir sey degismez.
+   * @returns {Promise<{ move: {from,to,promotion,san}|null, score, depth, nodes }>}
+   */
+  async think(fen, level, bias = 0, maxMs = Infinity) {
     if (this.worker) {
       const id = ++this.seq;
       try {
         return await new Promise((resolve, reject) => {
           this.pending.set(id, { resolve, reject });
-          this.worker.postMessage({ id, fen, level, bias });
+          this.worker.postMessage({ id, fen, level, bias, maxMs });
         });
       } catch {
         /* yedege dus */
       }
     }
-    return this.thinkSync(fen, level, bias);
+    return this.thinkSync(fen, level, bias, maxMs);
   }
 
-  async thinkSync(fen, level, bias = 0) {
+  async thinkSync(fen, level, bias = 0, maxMs = Infinity) {
     this.fallback ??= new Engine();
     const cfg = levelWithBias(level, bias);
-    const result = this.fallback.search(fen, { timeMs: cfg.timeMs, maxDepth: cfg.maxDepth });
+    const result = this.fallback.search(fen, {
+      timeMs: Math.min(cfg.timeMs, maxMs),
+      maxDepth: cfg.maxDepth,
+    });
     return {
       move: toPublicMove(pickMove(result, cfg.slack)),
       score: result.score,
