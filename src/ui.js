@@ -9,8 +9,11 @@ const DEFAULTS = {
   // "insan" = ayni ekranda iki kisi; digerleri motor seviyeleri
   opponent: "orta",
   playerColor: "w",
-  // Yeme sahnesinin uzunlugu: tam dovus guzel ama her hamlede 4 sn suruyor
-  duel: "kisa",
+  /* Yeme sahnesi. Varsayilan artik "imza": her tasin kendi koreografisi.
+     Sureler tas basina kademeli -- piyon 2,2 sn (en cok yenen tas, en kisa
+     sahne), vezir 5,3 sn (en nadir, en pahali). Eskiden hepsi ayni "kisa"
+     sahneydi ve tahtada at ile filin yemesi ayni goruntuydu. */
+  duel: "imza",
   // Satranc saati tempolari: timer.js TEMPOLAR. Varsayilan KAPALI --
   // saat, isteyenin actigi bir kisitlama olmali; oyunu ilk kez acan
   // birine dayatilirsa oynanis degil sinav olur.

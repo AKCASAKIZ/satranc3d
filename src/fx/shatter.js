@@ -132,6 +132,139 @@ function pozuPisir(skinned) {
   return geo;
 }
 
+/**
+ * DILIM: govdeyi iki duzlemle dorde ayirip parcalari BUTUN halinde savurur.
+ *
+ * createShatter'dan tek farki ucgenlerin nasil gruplandigi: orada her ucgen
+ * kendi hizini aliyor (toz bulutu), burada bir ceyrekteki butun ucgenler
+ * AYNI hizi, AYNI donme eksenini ve AYNI merkezi aliyor -- yani ceyrek kati
+ * bir cisim gibi hareket ediyor. "Patladi" ile "kesildi" arasindaki tek
+ * gorsel fark bu; ayni shader ikisini de cizebiliyor.
+ *
+ * Kesik duzlemleri kurbanin YEREL uzayinda: dikey kesik x=0 (gogusten
+ * asagi), yatay kesik y = govdenin orta yuksekligi. Kesikler gercek
+ * geometri bolmesi DEGIL -- ucgenler merkezlerine gore gruplaniyor, yani
+ * kesik yuzeyi kapatilmiyor (icerisi bos gorunur). Hareket hizli oldugu
+ * icin ekranda okunmuyor; kapatmak icin gercek duzlem-kesme gerekirdi ve
+ * bu, tek karede yapilacak bir is degil.
+ */
+export function createDilim(sourceMesh, { life = 1.6, power = 1.0, seed = 7331 } = {}) {
+  const rand = makeRandom(seed);
+  const geo = sourceMesh.isSkinnedMesh
+    ? pozuPisir(sourceMesh)
+    : sourceMesh.geometry.index
+      ? sourceMesh.geometry.toNonIndexed()
+      : sourceMesh.geometry.clone();
+
+  const pos = geo.attributes.position;
+  const triCount = pos.count / 3;
+
+  // Yatay kesik govdenin ortasindan gecmeli; sinir kutusundan olculuyor
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  const kesikY = (bb.min.y + bb.max.y) / 2;
+  const kesikX = (bb.min.x + bb.max.x) / 2;
+
+  const centroid = new Float32Array(pos.count * 3);
+  const velocity = new Float32Array(pos.count * 3);
+  const axis = new Float32Array(pos.count * 3);
+  const spin = new Float32Array(pos.count);
+  const delay = new Float32Array(pos.count);
+
+  /* Dort ceyregin hareketi. Ust yarilar yana savruluyor (kesigin yonu),
+     alt yarilar cokuyor -- ayakta duran bir govde ikiye bolununce ustu
+     ucar, alti yigilir. Hepsi ust ust: sol/sag ayrimi kesigin dikey
+     duzlemi, ust/alt ayrimi yatay duzlem. */
+  const ceyrekler = [
+    { ust: true, sol: true, v: [-2.1, 2.0, -0.35], spin: -7.5 },
+    { ust: true, sol: false, v: [2.1, 2.2, 0.35], spin: 7.5 },
+    { ust: false, sol: true, v: [-1.0, 0.35, -0.2], spin: -2.4 },
+    { ust: false, sol: false, v: [1.0, 0.3, 0.2], spin: 2.4 },
+  ];
+  // Her ceyregin kendi merkezi: donme o noktanin etrafinda olmali
+  const toplam = ceyrekler.map(() => ({ x: 0, y: 0, z: 0, n: 0 }));
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const mid = new THREE.Vector3();
+  const ceyrekNo = new Uint8Array(triCount);
+
+  for (let t = 0; t < triCount; t++) {
+    const i0 = t * 3;
+    a.fromBufferAttribute(pos, i0);
+    b.fromBufferAttribute(pos, i0 + 1);
+    c.fromBufferAttribute(pos, i0 + 2);
+    mid.copy(a).add(b).add(c).divideScalar(3);
+    const ust = mid.y >= kesikY;
+    const sol = mid.x < kesikX;
+    const no = ceyrekler.findIndex((q) => q.ust === ust && q.sol === sol);
+    ceyrekNo[t] = no;
+    const acc = toplam[no];
+    acc.x += mid.x; acc.y += mid.y; acc.z += mid.z; acc.n++;
+  }
+  const merkez = toplam.map((s) => (s.n ? { x: s.x / s.n, y: s.y / s.n, z: s.z / s.n } : { x: 0, y: 0, z: 0 }));
+
+  for (let t = 0; t < triCount; t++) {
+    const no = ceyrekNo[t];
+    const q = ceyrekler[no];
+    const m = merkez[no];
+    const i0 = t * 3;
+    // Ust ceyrekler once kopsun: kesik yukaridan asagi iniyor
+    const d = q.ust ? 0 : 0.06;
+    for (let v = 0; v < 3; v++) {
+      const i = (i0 + v) * 3;
+      centroid[i] = m.x; centroid[i + 1] = m.y; centroid[i + 2] = m.z;
+      velocity[i] = q.v[0] * power;
+      velocity[i + 1] = q.v[1] * power;
+      velocity[i + 2] = q.v[2] * power;
+      // Donme ekseni ceyrek basina sabit ama hafif dagilmali; tamamen ayni
+      // eksen dort parcayi mekanik gosteriyor
+      axis[i] = 0.15 * (rand() - 0.5);
+      axis[i + 1] = 0.2 * (rand() - 0.5);
+      axis[i + 2] = 1;
+      spin[i0 + v] = q.spin * power;
+      delay[i0 + v] = d;
+    }
+  }
+
+  geo.setAttribute("aCentroid", new THREE.BufferAttribute(centroid, 3));
+  geo.setAttribute("aVelocity", new THREE.BufferAttribute(velocity, 3));
+  geo.setAttribute("aAxis", new THREE.BufferAttribute(axis, 3));
+  geo.setAttribute("aSpin", new THREE.BufferAttribute(spin, 1));
+  geo.setAttribute("aDelay", new THREE.BufferAttribute(delay, 1));
+
+  const material = new THREE.ShaderMaterial({
+    vertexShader: VERT,
+    fragmentShader: FRAG,
+    transparent: true,
+    side: THREE.DoubleSide,
+    uniforms: {
+      uTime: { value: 0 },
+      uGravity: { value: 5.0 },
+      uLife: { value: life },
+      uColor: { value: new THREE.Color(sourceMesh.material.color) },
+      uFlashColor: { value: new THREE.Color(0xfff0c8) },
+    },
+  });
+
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.position.copy(sourceMesh.position);
+  mesh.rotation.copy(sourceMesh.rotation);
+  mesh.frustumCulled = false;
+
+  let elapsed = 0;
+  return {
+    mesh,
+    update(dt) {
+      elapsed += dt;
+      material.uniforms.uTime.value = elapsed;
+      return elapsed >= life;
+    },
+    seek(t) { elapsed = t; material.uniforms.uTime.value = t; },
+    dispose() { geo.dispose(); material.dispose(); },
+  };
+}
+
 export function createShatter(sourceMesh, { seed = 1337, life = 1.5, power = 1.0 } = {}) {
   const rand = makeRandom(seed);
 

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { squareToWorld } from "./board.js";
 import { flash, rampaEkSure } from "./fx/impact.js";
-import { createShatter } from "./fx/shatter.js";
+import { createDilim, createShatter } from "./fx/shatter.js";
 import { createLightning } from "./fx/sky.js";
 import { play } from "./fx/audio.js";
 import { skorGiris, skorVurus, skorCarpma } from "./fx/score.js";
@@ -12,6 +12,8 @@ import {
   ATTACK_LENGTH,
   BLOCK_IMPACT,
   CLIP_LENGTH,
+  COMBO_IMPACTS,
+  DODGE_EVADE,
   EK_LENGTH,
   KICK_IMPACT,
   POZ,
@@ -46,7 +48,13 @@ const easeOutCubic = (k) => 1 - Math.pow(1 - k, 3);
 
 /** Klip oynatma hizlari. Ham klipler sinematik tempoda; oyun icin sikilastirildi. */
 /* walk burada YOK: yurume hizi artik yer hizindan turetiliyor (yuruHizi). */
-const SPEED = { attack: 1.3, block: 1.3, hit: 1.3, death: 1.35, victory: 1.35, kick: 1.12 };
+const SPEED = {
+  attack: 1.3, block: 1.3, hit: 1.3, death: 1.35, victory: 1.35, kick: 1.12,
+  // Kombo ve selam biraz daha AGIR oynuyor: kombo uc vurusun ayri ayri
+  // okunmasi icin, selam toren oldugu icin. Kacis ise tersine hizli --
+  // kacamayan bir kacis komik duruyor.
+  combo: 1.18, dodge: 1.45, salute: 1.15,
+};
 
 /* Tahtada yurume hizi (kare/sn).
    2.6 idi; kaide disklerini kaldirinca ayaklar ortaya cikti ve taslar
@@ -155,8 +163,50 @@ const DULI_GIRIS = 0.35; // Idle'dan tek ayaga gecis
 const DULI_LEN = 1.15; // du li bu'da gecen sure (giris dahil)
 const MABU_LEN = 0.95; // ban ma bu'da gecen sure (klip dongusel)
 
+/* ---------------------------------------------------------------------------
+ * IMZA OLDURUSLERI -- her tasin kendi dovusu
+ *
+ * Eskiden yeme sahnesi yalnizca MODA bagliydi: alti tas da ayni klipleri
+ * ayni sirada oynuyor, fark yalnizca darbenin agirligi (POWER), parcalanma
+ * ve vezirdeki yildirimdi. Yani "at yedi" ile "fil yedi" ekranda ayni
+ * goruntuydu.
+ *
+ * Burada saldiran tasin TIPI koreografiyi seciyor. Tam 30'luk yiyen-kurban
+ * matrisi degil -- 6 imza; hissin buyuk kismini o veriyor ve bir partide
+ * 20-30 yeme oldugu icin 30 ayri sahne zaten ezber bozmuyor, yoruyor.
+ *
+ * Kliplerin hepsi kung-fu setinde ZATEN vardi; Attack_Combo, Dodge ve
+ * Salute hic kullanilmiyordu (COMBO_IMPACTS/DODGE_EVADE sabitleri de
+ * pieces.js'te bos duruyordu).
+ *
+ * Eski set (assets/glb_savasci) bu kliplerin hicbirine sahip degil.
+ * `play()` bilinmeyen klipte 0 donuyor, her yerde yedek davranis var --
+ * imza modu eski sette sessizce sade dovuse dusuyor, sahne durmuyor.
+ * ------------------------------------------------------------------------- */
+export const IMZA = {
+  // Piyon: toren yok. Yaklasir, tek darbe, biter. Ucuz olmasi KASITLI --
+  // en cok yenen tas bu, her seferinde gosteri yapamaz.
+  p: { taban: "kisa" },
+  // At: once kurbanin savurmasindan KACAR, sonra karsi vurus. Atin tahtadaki
+  // karakteri (sekerek gelir, beklenmedik yerden vurur) hareketle anlatiliyor.
+  n: { taban: "kisa", giris: "kacis" },
+  // Fil: uc vuruslu kombo. Capraz giden tas, kesintisiz akan bir seri.
+  b: { taban: "tam", vurus: "kombo" },
+  // Kale: sparta tekmesi. Kanalin imza cekimi kalede kaliyor -- agir,
+  // duz, yikici; kalenin hareketi de oyle.
+  r: { taban: "sparta" },
+  /* Vezir: kombo, sonra IKI KESIK -- biri dikey biri yatay -- ve govde
+     dorde ayrilip savruluyor (fx/shatter.js createDilim). Oyunun en pahali
+     sahnesi, tahtanin en pahali tasinda. Tekme kalede kaliyor: iki tas da
+     tekme atarsa ikisi de imzasini kaybediyor. */
+  q: { taban: "tam", vurus: "kombo", kesik: true },
+  // Sah: selam - infaz - selam. Tek toren bu; sah nadiren yiyor.
+  k: { taban: "tam", giris: "selam", kapanis: "selam" },
+};
+
 /** Dovus uzunlugu ayari. UI'da "Oldurus" basligi altinda. */
 export const DUEL_MODES = {
+  imza: "Signature",
   sparta: "Sparta kick",
   tam: "Full duel",
   kisa: "Single strike",
@@ -174,7 +224,137 @@ const duelMode = (settings) => (settings?.duel in DUEL_MODES ? settings.duel : "
  * @param {string} mode "tam" | "kisa" | "kapali"
  * @param {number} dist saldiran ile kurban arasindaki kare mesafesi
  */
+/* Plandaki butun ZAMAN alanlari. Kaydirma islemleri (imza girisleri,
+   kombo) bu listeden gidiyor -- yeni bir zaman alani eklenirse BURAYA DA
+   eklenmeli, yoksa o alan kaydirilmadan kalir ve sahne kayar. Hiz ve guc
+   alanlari (yaklasmaKareSn, power, attackHit, ucus) bilerek disarida. */
+const ZAMAN_ALANLARI = [
+  "walkEnd", "firstSwing", "blockStart", "blocked", "kickStart", "lethalSwing",
+  "lethal", "carpma", "deathStart", "fadeStart", "advanceStart", "advanceEnd",
+  "duliStart", "duliEnd", "mabuStart", "mabuEnd", "victoryStart", "victoryEnd",
+  "kesikSwing1", "kesikVurus1", "kesikSwing2", "kesikVurus2",
+  "girisStart", "kapanisStart",
+  "total",
+];
+
+/** Secilen alanlari dt kadar oteler; null/undefined olanlara dokunmaz. */
+function kaydir(plan, dt, alanlar = ZAMAN_ALANLARI) {
+  if (!dt) return plan;
+  for (const k of alanlar) {
+    if (typeof plan[k] === "number") plan[k] += dt;
+  }
+  return plan;
+}
+
+/**
+ * Imza plani: taban koreografiyi kurar, uzerine giris/kombo/kapanis ekler.
+ *
+ * Taban planlar oldugu gibi kullaniliyor (plan.mode taban modda kaliyor) --
+ * boylece runFinisher'daki mevcut cue kodu hic degismeden calisiyor, imza
+ * yalnizca EKLIYOR. Ayri bir zaman cizelgesi yazmak ayni sahneyi ikinci kez
+ * yazmak olurdu ve ikisi kacinilmaz olarak birbirinden sapardi.
+ */
+function planImza(type, dist) {
+  const stil = IMZA[type] ?? IMZA.p;
+  const plan = planFinisher(type, stil.taban, dist);
+  plan.imza = stil;
+
+  if (stil.vurus === "kombo") {
+    const komboLen = EK_LENGTH[CLIP_EK.COMBO] / SPEED.combo;
+    const komboVurus = COMBO_IMPACTS.map((t) => t / SPEED.combo);
+    const attackLen = ATTACK_LENGTH[type] / SPEED.attack;
+
+    plan.kombo = komboVurus;
+    if (plan.mode === "sparta") {
+      /* Vezir: kombo, sparta'nin "bloklanan savurma"sinin yerine geciyor.
+         Tekme kombonun %92'sinde basliyor -- tam bitiminde baslarsa arada
+         olu bir an oluyor, erken baslarsa kombonun son vurusu yutulyor. */
+      plan.blocked = plan.firstSwing + komboVurus[0];
+      plan.blockStart = plan.blocked - BLOCK_IMPACT / SPEED.block;
+      kaydir(plan, komboLen * 0.92 - attackLen * 0.72, [
+        "kickStart", "lethalSwing", "lethal", "carpma", "deathStart", "fadeStart",
+        "advanceStart", "advanceEnd", "duliStart", "duliEnd", "mabuStart", "mabuEnd",
+        "total",
+      ]);
+    } else {
+      /* Fil/vezir: oldurucu vurus kombonun UCUNCU darbesi, ilk ikisi
+         kurbani sarsiyor. Tam dovusun bloklanan ACILIS savurmasi kaldiriliyor
+         (null): kombo zaten uc darbe, ustune bir de acilis koyunca sahne
+         bes vurusa cikiyor ve bir partide 20-30 kez izlenecek bir sey icin
+         cok uzun. Null'lar guvenli -- cueRunner sonlu olmayan zamanlari
+         listeden duguruyor. */
+      const eskiLethal = plan.lethal;
+      plan.firstSwing = plan.walkEnd;
+      plan.lethalSwing = plan.walkEnd;
+      plan.blocked = null;
+      plan.blockStart = null;
+      plan.lethal = plan.lethalSwing + komboVurus[2];
+      kaydir(plan, plan.lethal - eskiLethal, [
+        "deathStart", "fadeStart", "advanceStart", "advanceEnd",
+        "victoryStart", "victoryEnd", "total",
+      ]);
+    }
+  }
+
+  /* Iki kesik: kombonun son vurusundan hemen sonra dikey, onun uzerine
+     yatay. Oldurucu olan IKINCISI -- govde ancak ikinci kesikten sonra
+     dorde ayrilabilir. Ikisi arasi savurma klibinin %58'i: daha uzunu iki
+     ayri saldiri gibi duruyor, daha kisasi tek bulanik hareket. */
+  if (stil.kesik) {
+    const swingLen = ATTACK_LENGTH[type] / SPEED.attack;
+    const swingHit = ATTACK_IMPACT[type] / SPEED.attack;
+    const swing1 = plan.lethal + 0.06;
+    const vurus1 = swing1 + swingHit;
+    const swing2 = swing1 + swingLen * 0.58;
+    const vurus2 = swing2 + swingHit;
+    kaydir(plan, vurus2 - plan.lethal, [
+      "lethal", "deathStart", "fadeStart", "advanceStart", "advanceEnd",
+      "victoryStart", "victoryEnd", "total",
+    ]);
+    /* Duz alan olarak yaziliyorlar (ic ice nesne DEGIL): ZAMAN_ALANLARI
+       listesindeki her sey sonraki kaydirmalarda otomatik oteleniyor,
+       nesnenin icindeki sayilar ise sessizce yerinde kalirdi. */
+    plan.kesikli = true;
+    plan.kesikSwing1 = swing1;
+    plan.kesikVurus1 = vurus1;
+    plan.kesikSwing2 = swing2;
+    plan.kesikVurus2 = vurus2;
+  }
+
+  // Giris: kurban savurur/saldiran selam durur; ana cizelge o kadar gecikir.
+  if (stil.giris) {
+    const len =
+      stil.giris === "kacis"
+        ? EK_LENGTH[CLIP_EK.DODGE] / SPEED.dodge
+        : EK_LENGTH[CLIP_EK.SALUTE] / SPEED.salute;
+    /* Giris YURUYUSTEN SONRA: uzaktan selam durmak ya da daha yaklasmadan
+       kacmak anlamsiz. Bu yuzden walkEnd disindaki her sey oteleniyor. */
+    plan.girisTip = stil.giris;
+    plan.girisLen = len;
+    kaydir(plan, len, ZAMAN_ALANLARI.filter((k) => k !== "walkEnd"));
+    // SIRA ONEMLI: girisStart kaydirmadan SONRA yaziliyor, cunku kendisi de
+    // ZAMAN_ALANLARI'nda -- once yazilsaydi giris kendi uzunlugu kadar
+    // otelenip yuruyusun bittigi anin ilerisine kacardi.
+    plan.girisStart = plan.walkEnd;
+  }
+
+  if (stil.kapanis === "selam") {
+    /* Zafer klibi SUSTURULUYOR: kapanis selami onun yerine geciyor. Ikisi
+       de advanceEnd'de duruyor ve ayni ana iki klip yazilirsa hangisinin
+       kazandigi cue sirasina kalir -- sessiz ve kirilgan. 0,05 sn geriden
+       gelmesi de bilincli: advanceEnd'deki "place" sesi once dusuyor. */
+    plan.victoryStart = null;
+    plan.victoryEnd = null;
+    plan.kapanisStart = plan.advanceEnd + 0.05;
+    plan.kapanisLen = (EK_LENGTH[CLIP_EK.SALUTE] / SPEED.salute) * 0.7;
+    plan.total = Math.max(plan.total, plan.kapanisStart + plan.kapanisLen);
+  }
+
+  return plan;
+}
+
 export function planFinisher(type, mode = "kisa", dist = 1) {
+  if (mode === "imza") return planImza(type, dist);
   const power = POWER[type] ?? 1;
 
   if (mode === "kapali") {
@@ -290,9 +470,12 @@ export function planFinisher(type, mode = "kisa", dist = 1) {
  */
 export function finisherTiming(type, mode = "kisa", dist = 1) {
   const p = planFinisher(type, mode, dist);
-  // Yavas cekim sahne saatini degil GERCEK sureyi uzatiyor; klip kaydi
-  // videoyu buna gore uzatmazsa dovus bitmeden kesiliyor.
-  const rampa = mode === "sparta" ? rampaEkSure(SPARTA_RAMPA) + rampaEkSure(SPARTA_CARPMA_RAMPA) : 0;
+  /* Yavas cekim sahne saatini degil GERCEK sureyi uzatiyor; klip kaydi
+     videoyu buna gore uzatmazsa dovus bitmeden kesiliyor.
+     !! Kosul ISTENEN moda degil PLANIN moduna bakiyor: "imza" modunda kale
+     sparta koreografisini oynuyor ama disaridan gelen ad "imza". Istenen
+     moda bakilsaydi kalenin klipleri rampa suresi kadar erken kesilirdi. */
+  const rampa = p.mode === "sparta" ? rampaEkSure(SPARTA_RAMPA) + rampaEkSure(SPARTA_CARPMA_RAMPA) : 0;
   return {
     duration: p.total,
     impactAt: p.lethal / p.total,
@@ -383,6 +566,58 @@ export function runFinisher({
         };
 
         const cues = [];
+
+        /* --- IMZA GIRISI ve KAPANISI ---
+           Taban koreografiden BAGIMSIZ: hangi mod calisirsa calissin
+           yuruyusun bitiminde giris, ilerlemenin sonunda kapanis oynuyor.
+           Ana cizelge planImza'da zaten bu kadar otelendi. */
+        if (plan.girisTip === "kacis") {
+          // At: kurban once saldiriyor, at kaciyor. Kacis bir SEBEP veriyor --
+          // atin neden karsi vurusla oldurdugunu anlatan tek sey bu.
+          cues.push({
+            t: plan.girisStart,
+            run: () => {
+              victim?.play(CLIP.ATTACK, { loop: false, speed: SPEED.attack * 1.1 });
+              fx.sound("whoosh", { power: p * 0.8 }, 0.08);
+            },
+          });
+          cues.push({
+            t: plan.girisStart + DODGE_EVADE / SPEED.dodge,
+            run: () => {
+              const sure = attacker.play(CLIP_EK.DODGE, { loop: false, speed: SPEED.dodge, fade: 0.08 });
+              if (!sure) attacker.play(CLIP.BLOCK, { loop: false, speed: SPEED.block, fade: 0.08 });
+              // Kacista TEMAS YOK: flas ve sarsinti kasitli olarak eksik,
+              // "isabet etmedi"yi anlatan sey sessizlik.
+              fx.sound("dust", { power: p * 0.5 });
+              timeScale.freeze(18);
+            },
+          });
+        } else if (plan.girisTip === "selam") {
+          // Sah: infazdan once selam. Tek toren bu; sah nadiren yiyor.
+          cues.push({
+            t: plan.girisStart,
+            run: () => {
+              const sure = attacker.play(CLIP_EK.SALUTE, { loop: false, speed: SPEED.salute, fade: 0.2 });
+              if (!sure) attacker.idle(0.25);
+              fx.sound("place", { power: p * 0.6 });
+              victim?.play(CLIP.BLOCK, { loop: false, speed: SPEED.block * 0.8, fade: 0.2 });
+            },
+          });
+        }
+
+        if (plan.kapanisStart != null) {
+          cues.push({
+            t: plan.kapanisStart,
+            run: () => {
+              const sure = attacker.play(CLIP_EK.SALUTE, { loop: false, speed: SPEED.salute, fade: 0.25 });
+              if (!sure) attacker.idle(0.3);
+            },
+          });
+          cues.push({
+            t: plan.kapanisStart + plan.kapanisLen,
+            run: () => attacker.idle(0.35),
+          });
+        }
 
         if (plan.mode === "kapali") {
           cues.push({ t: 0, run: () => attacker.play(CLIP.WALK, { loop: true, speed: yuruHizi(plan.yaklasmaKareSn) }) });
@@ -507,10 +742,64 @@ export function runFinisher({
           cues.push({
             t: plan.lethalSwing,
             run: () => {
-              attacker.play(CLIP.ATTACK, { loop: false, speed: SPEED.attack, fade: 0.1 });
+              /* Imza: fil ve vezir tek savurma degil KOMBO oynuyor. Klip
+                 yoksa (eski savasci seti) play() 0 doner ve normal savurmaya
+                 duseriz -- sahne durmaz, yalnizca sadelesir. */
+              const komboSure = plan.kombo
+                ? attacker.play(CLIP_EK.COMBO, { loop: false, speed: SPEED.combo, fade: 0.1 })
+                : 0;
+              if (!komboSure) {
+                attacker.play(CLIP.ATTACK, { loop: false, speed: SPEED.attack, fade: 0.1 });
+              }
               swing();
             },
           });
+          /* Kombonun ilk iki darbesi: kurban sarsiliyor ama olmuyor.
+             Uc darbenin ucu de ayni sesle gecerse kombo tek uzun vurus gibi
+             duyuluyor -- ilk ikisi "clash", sonuncusu asagidaki oldurucu. */
+          if (plan.kombo) {
+            for (let i = 0; i < 2; i++) {
+              cues.push({
+                t: plan.lethalSwing + plan.kombo[i],
+                run: () => {
+                  fx.flash({ strength: 0.09 + 0.08 * p, ms: 110 });
+                  rig.shake?.fire(0.06 * p, 0.18);
+                  timeScale.freeze(22 + 16 * p);
+                  fx.sound("clash", { power: p * 0.85 });
+                  victim?.play(CLIP.HIT, { loop: false, speed: SPEED.hit * 1.25, fade: 0.05 });
+                },
+              });
+            }
+          }
+          /* Vezir: iki kesik. Ilki dikey, ikincisi yatay ve oldurucu.
+             Ikisi de ayni Attack klibi -- kesigin YONUNU klip degil govdenin
+             dorde ayrilma bicimi anlatiyor (createDilim). */
+          if (plan.kesikli) {
+            cues.push({
+              t: plan.kesikSwing1,
+              run: () => {
+                attacker.play(CLIP.ATTACK, { loop: false, speed: SPEED.attack * 1.25, fade: 0.07 });
+                fx.sound("whoosh", { power: p * 1.1 });
+              },
+            });
+            cues.push({
+              t: plan.kesikVurus1,
+              run: () => {
+                fx.flash({ strength: 0.2 + 0.1 * p, ms: 150 });
+                rig.shake?.fire(0.12 * p, 0.26);
+                timeScale.freeze(45 + 24 * p);
+                fx.sound("kirilma", { power: p * 0.8 });
+                victim?.play(CLIP.HIT, { loop: false, speed: SPEED.hit, fade: 0.04 });
+              },
+            });
+            cues.push({
+              t: plan.kesikSwing2,
+              run: () => {
+                attacker.play(CLIP.ATTACK, { loop: false, speed: SPEED.attack * 1.25, fade: 0.07 });
+                fx.sound("whoosh", { power: p * 1.2 });
+              },
+            });
+          }
           cues.push({
             t: plan.lethal,
             run: () => {
@@ -518,15 +807,32 @@ export function runFinisher({
               victim?.play(CLIP.HIT, { loop: false, speed: SPEED.hit, fade: 0.06 });
             },
           });
-          cues.push({
-            t: plan.deathStart,
-            run: () => {
-              victim?.play(CLIP.DEATH, { loop: false, speed: SPEED.death, fade: 0.12 });
-              // Govdenin tahtaya carpmasi olum klibinin ortasinda; ses de orada
-              fx.sound("death", { power: p }, 0.42);
-              fx.sound("shatter", { power: p * 0.7 }, 0.5);
-            },
-          });
+          if (plan.kesikli) {
+            /* Kesikte OLUM KLIBI OYNAMIYOR: ikinci kesikten sonra ortada
+               devrilecek bir govde yok, dort parca var. Olum klibi de
+               oynasaydi govde bir yandan cokerken bir yandan dagiliyor
+               gorunurdu. Bu yuzden dilim dogrudan oldurucu vurusun ustune
+               biniyor ve figur ayni karede gizleniyor. */
+            cues.push({
+              t: plan.lethal + 0.02,
+              run: () => {
+                if (victim) dilimle(victim, p);
+                fx.sound("kirilma", { power: p * 1.25 });
+                fx.sound("shatter", { power: p }, 0.06);
+                fx.sound("death", { power: p }, 0.3);
+              },
+            });
+          } else {
+            cues.push({
+              t: plan.deathStart,
+              run: () => {
+                victim?.play(CLIP.DEATH, { loop: false, speed: SPEED.death, fade: 0.12 });
+                // Govdenin tahtaya carpmasi olum klibinin ortasinda; ses de orada
+                fx.sound("death", { power: p }, 0.42);
+                fx.sound("shatter", { power: p * 0.7 }, 0.5);
+              },
+            });
+          }
           /* --- BUYUK TASLARDA PARCALANMA --- *
            *
            *  Her yemede ayni gosteriyi oynatmak yormanin en hizli yolu: bir
@@ -557,7 +863,9 @@ export function runFinisher({
             // ortuyordu ve simsek hic okunmuyordu.
             cues.push({ t: parcaAni - 0.5, run: () => yildirimDusur(victim) });
           }
-          if (victim && PARCALANAN.has(victim.userData?.type)) {
+          // Kesikte govde zaten dorde ayrildi; ustune bir de patlatmak
+          // parcalari parcalamak olur
+          if (victim && !plan.kesikli && PARCALANAN.has(victim.userData?.type)) {
             cues.push({ t: parcaAni, run: () => parcala(victim, p) });
           }
           cues.push({
@@ -568,7 +876,9 @@ export function runFinisher({
             t: plan.advanceEnd,
             run: () => {
               fx.sound("place");
-              if (plan.mode === "tam") {
+              // victoryStart null olabilir: imza kapanisi (sah selami) zafer
+              // klibinin yerine geciyor -- bkz. planImza
+              if (plan.mode === "tam" && plan.victoryStart != null) {
                 attacker.play(CLIP.VICTORY, { loop: false, speed: SPEED.victory });
                 fx.sound("victory", { power: p }, 0.18);
               } else {
@@ -600,6 +910,36 @@ export function runFinisher({
               continue;            // bir parca patlamazsa sahne durmasin
             }
             // Parcalar mesh'in DUNYA konumunda dogsun: geometri yerel uzayda
+            mesh.updateWorldMatrix(true, false);
+            s.mesh.applyMatrix4(mesh.matrixWorld);
+            scene.add(s.mesh);
+            clock.add((d) => {
+              if (s.update(d)) { scene.remove(s.mesh); s.dispose(); return true; }
+              return false;
+            });
+          }
+          kurban.visible = false;
+        };
+
+        /* Vezirin iki kesigi: govde dorde ayrilip savruluyor.
+           parcala ile ayni iskelet -- fark, her ceyregin BUTUN halinde
+           ucmasi (bkz. createDilim). Kaide de dahil butun mesh'ler ayni
+           kesik duzlemlerinden geciyor, yoksa govde ikiye ayrilirken
+           kaide yerinde duruyor. */
+        const dilimle = (kurban, guc) => {
+          const parcalar = [];
+          kurban.traverse((o) => {
+            if (o.isMesh && o.visible && o.geometry?.attributes?.position) parcalar.push(o);
+          });
+          if (!parcalar.length) return;
+          let tohum = 7331;
+          for (const mesh of parcalar) {
+            let s;
+            try {
+              s = createDilim(mesh, { seed: tohum++, life: 1.7, power: 0.85 + guc * 0.35 });
+            } catch {
+              continue;
+            }
             mesh.updateWorldMatrix(true, false);
             s.mesh.applyMatrix4(mesh.matrixWorld);
             scene.add(s.mesh);
